@@ -1,0 +1,8 @@
+{
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/main.js",
+    "migrate": "sequelize db:migrate",
+    "migrate:undo": "sequelize db:migrate:undo"
+  }
+}
