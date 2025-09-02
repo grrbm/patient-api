@@ -1,2 +1,3 @@
+# .aptible.yml  (root)
 before_release:
-  - npm run migrate
+  - /bin/sh -lc 'if [ "$RUN_MIGRATIONS" = "true" ]; then echo "Running migrations"; npm run migrate; else echo "Skipping migrations"; fi'
