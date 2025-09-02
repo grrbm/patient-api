@@ -1,21 +1,21 @@
 # syntax=docker/dockerfile:1
 
 ############################
-# 1) Base with lockfiles
+# 1) Base
 ############################
 FROM node:22-alpine AS base
-WORKDIR /app
+WORKDIR /app/backend
 ENV CI=1
-COPY package*.json ./
+COPY backend/package*.json ./
 
 ############################
-# 2) Production dependencies
+# 2) Production deps
 ############################
 FROM base AS deps-prod
 RUN npm ci --omit=dev
 
 ############################
-# 3) Build dependencies
+# 3) Build deps
 ############################
 FROM base AS deps-build
 RUN npm ci
@@ -24,31 +24,30 @@ RUN npm ci
 # 4) Compile TypeScript
 ############################
 FROM deps-build AS build
-COPY tsconfig.json ./
-COPY src ./src
+COPY backend/tsconfig.json ./
+COPY backend/src ./src
 RUN npm run build
 
 ############################
 # 5) Runtime image
 ############################
 FROM node:22-alpine AS runtime
-WORKDIR /app
+WORKDIR /app/backend
 ENV NODE_ENV=production
 
-# copy production dependencies
-COPY --from=deps-prod /app/node_modules ./node_modules
+# prod deps
+COPY --from=deps-prod /app/backend/node_modules ./node_modules
 
-# copy compiled app
-COPY --from=build /app/dist ./dist
+# compiled app
+COPY --from=build /app/backend/dist ./dist
 
-# copy config + migrations for sequelize CLI
-COPY package*.json ./
-COPY .sequelizerc ./
-COPY sequelize.config.cjs ./
-COPY migrations ./migrations
-# optionally add models/seeders if you use them
-# COPY models ./models
-# COPY seeders ./seeders
+# config + migrations for sequelize CLI
+COPY backend/package*.json ./
+COPY backend/.sequelizerc ./
+COPY backend/sequelize.config.cjs ./
+COPY backend/migrations ./migrations
+# COPY backend/models ./models
+# COPY backend/seeders ./seeders
 
 EXPOSE 3000
 CMD ["node", "dist/main.js"]
