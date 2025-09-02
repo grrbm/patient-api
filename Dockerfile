@@ -6,46 +6,49 @@
 FROM node:22-alpine AS base
 WORKDIR /app
 ENV CI=1
-# keep caching fast by copying only lockfiles first
 COPY package*.json ./
 
 ############################
-# 2) Prod deps (runtime layer)
+# 2) Production dependencies
 ############################
 FROM base AS deps-prod
 RUN npm ci --omit=dev
 
 ############################
-# 3) Full deps for build (TS)
+# 3) Build dependencies
 ############################
 FROM base AS deps-build
 RUN npm ci
 
 ############################
-# 4) Build TypeScript
+# 4) Compile TypeScript
 ############################
 FROM deps-build AS build
-# copy just what the compiler needs
 COPY tsconfig.json ./
 COPY src ./src
 RUN npm run build
 
 ############################
-# 5) Final runtime image
+# 5) Runtime image
 ############################
 FROM node:22-alpine AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
 
-# runtime node_modules (prod-only)
+# copy production dependencies
 COPY --from=deps-prod /app/node_modules ./node_modules
 
-# compiled JS
+# copy compiled app
 COPY --from=build /app/dist ./dist
 
-# 👇 keep package.json present so `npm run migrate` works in .aptible.yml
+# copy config + migrations for sequelize CLI
 COPY package*.json ./
+COPY .sequelizerc ./
+COPY sequelize.config.cjs ./
+COPY migrations ./migrations
+# optionally add models/seeders if you use them
+# COPY models ./models
+# COPY seeders ./seeders
 
-# App listens on $PORT (Aptible injects it)
 EXPOSE 3000
 CMD ["node", "dist/main.js"]
