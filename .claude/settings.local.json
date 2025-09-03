@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mv:*)",
+      "Bash(rmdir:*)",
+      "Bash(find:*)"
+    ],
+    "additionalDirectories": [
+      "/Users/guilhermereis/Desktop/clones/patient-frontend"
+    ]
+  }
+}
