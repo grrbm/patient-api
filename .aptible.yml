@@ -1,3 +1,11 @@
-# .aptible.yml  (root)
+# .aptible.yml
+before_build:
+  - |
+    if [ "$APTIBLE_APP_HANDLE" = "patient-frontend-staging" ]; then
+      cp Dockerfile.frontend Dockerfile
+    elif [ "$APTIBLE_APP_HANDLE" = "patient-api-staging" ]; then
+      cp Dockerfile.backend Dockerfile
+    fi
+
 before_release:
   - /bin/sh -lc 'if [ "$RUN_MIGRATIONS" = "true" ]; then echo "Running migrations"; npm run migrate; else echo "Skipping migrations"; fi'
