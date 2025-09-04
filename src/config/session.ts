@@ -40,13 +40,13 @@ export const sessionConfig = session({
   resave: false, // Don't save session if unmodified
   saveUninitialized: false, // Don't create session until something is stored
   
-  // Security settings
+  // Security settings  
   cookie: {
     secure: process.env.NODE_ENV === 'production', // HTTPS only in production
     httpOnly: true, // Prevent XSS attacks
     maxAge: 30 * 60 * 1000, // 30 minutes (HIPAA compliance - short session timeout)
     sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'strict', // Allow cross-site cookies in production for Aptible domains
-    domain: process.env.NODE_ENV === 'production' ? '.on-aptible.com' : undefined, // Allow sharing across Aptible subdomains
+    // Remove domain setting - let browser handle it naturally
   },
   
   // Session cleanup

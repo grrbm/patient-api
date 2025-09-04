@@ -183,6 +183,7 @@ app.get("/auth/me", async (req, res) => {
     console.log('Session ID:', req.sessionID);
     console.log('Session data:', req.session ? 'exists' : 'missing');
     console.log('User ID in session:', req.session?.userId);
+    console.log('Cookies received:', req.headers.cookie || 'No cookies');
     
     // Check if user is authenticated via session
     if (!isAuthenticated(req)) {
