@@ -12,6 +12,9 @@ export interface UserAttributes {
   dob?: string;
   phoneNumber?: string;
   address?: string;
+  city?: string;
+  state?: string;
+  zipCode?: string;
   role: 'patient' | 'doctor' | 'admin';
   lastLoginAt?: Date;
   consentGivenAt?: Date;
@@ -33,6 +36,9 @@ export class User extends Model<UserAttributes, UserCreationAttributes> implemen
   declare dob?: string;
   declare phoneNumber?: string;
   declare address?: string;
+  declare city?: string;
+  declare state?: string;
+  declare zipCode?: string;
   declare role: 'patient' | 'doctor' | 'admin';
   declare lastLoginAt?: Date;
   declare consentGivenAt?: Date;
@@ -65,6 +71,9 @@ export class User extends Model<UserAttributes, UserCreationAttributes> implemen
       phoneNumber: this.phoneNumber,
       dob: this.dob,
       address: this.address,
+      city: this.city,
+      state: this.state,
+      zipCode: this.zipCode,
       role: this.role,
       createdAt: this.createdAt,
       lastLoginAt: this.lastLoginAt,

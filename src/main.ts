@@ -228,7 +228,7 @@ app.put("/auth/profile", authenticateJWT, async (req, res) => {
       });
     }
 
-    const { firstName, lastName, phoneNumber, dob } = req.body;
+    const { firstName, lastName, phoneNumber, dob, address, city, state, zipCode } = req.body;
 
     // HIPAA Compliance: Validate required fields
     if (!firstName || !lastName) {
@@ -253,6 +253,10 @@ app.put("/auth/profile", authenticateJWT, async (req, res) => {
       lastName: lastName.trim(),
       phoneNumber: phoneNumber?.trim() || null,
       dob: dob?.trim() || null,
+      address: address?.trim() || null,
+      city: city?.trim() || null,
+      state: state?.trim() || null,
+      zipCode: zipCode?.trim() || null,
     });
 
     console.log('Profile updated for user:', user.email); // Safe - no PHI
