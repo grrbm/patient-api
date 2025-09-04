@@ -1,6 +1,8 @@
 import express from "express";
 import helmet from "helmet";
 import cors from "cors";
+import { initializeDatabase } from "./config/database";
+import { User } from "./models/User";
 
 const app = express();
 
@@ -23,7 +25,6 @@ app.get("/healthz", (_req, res) => res.status(200).send("ok"));
 // Auth routes
 app.post("/auth/signup", async (req, res) => {
   try {
-    // TODO: Implement actual user registration logic with database
     const { firstName, lastName, email, password, role, dateOfBirth, phoneNumber } = req.body;
     
     // Basic validation
@@ -33,28 +34,63 @@ app.post("/auth/signup", async (req, res) => {
         message: "Missing required fields" 
       });
     }
-    
-    // For now, just return success (you'll need to implement actual database logic)
-    console.log('User registration attempt for:', email); // Safe to log email for development
+
+    // Check if user already exists
+    const existingUser = await User.findByEmail(email);
+    if (existingUser) {
+      return res.status(409).json({
+        success: false,
+        message: "User with this email already exists"
+      });
+    }
+
+    // Create new user in database
+    const user = await User.createUser({
+      firstName,
+      lastName,
+      email,
+      password,
+      role: role === 'provider' ? 'doctor' : 'patient', // Map frontend role to backend role
+      dob: dateOfBirth,
+      phoneNumber,
+    });
+
+    console.log('User successfully registered:', user.email); // Safe to log email for development
     
     res.status(201).json({ 
       success: true, 
-      message: "User registered successfully" 
+      message: "User registered successfully",
+      user: user.toSafeJSON() // Return safe user data
     });
     
-  } catch (error) {
-    // HIPAA Compliance: Don't log the actual error details
-    console.error('Registration error occurred');
+  } catch (error: any) {
+    // HIPAA Compliance: Don't log the actual error details that might contain PHI
+    console.error('Registration error occurred:', error.name);
+    
+    // Handle specific database errors
+    if (error.name === 'SequelizeUniqueConstraintError') {
+      return res.status(409).json({
+        success: false,
+        message: "User with this email already exists"
+      });
+    }
+    
+    if (error.name === 'SequelizeValidationError') {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid user data provided"
+      });
+    }
+    
     res.status(500).json({ 
       success: false, 
-      message: "Registration failed" 
+      message: "Registration failed. Please try again." 
     });
   }
 });
 
 app.post("/auth/signin", async (req, res) => {
   try {
-    // TODO: Implement actual authentication logic
     const { email, password } = req.body;
     
     if (!email || !password) {
@@ -63,20 +99,41 @@ app.post("/auth/signin", async (req, res) => {
         message: "Email and password are required" 
       });
     }
+
+    // Find user by email
+    const user = await User.findByEmail(email);
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid email or password"
+      });
+    }
+
+    // Validate password
+    const isValidPassword = await user.validatePassword(password);
+    if (!isValidPassword) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid email or password"
+      });
+    }
+
+    // Update last login time
+    await user.updateLastLogin();
     
-    // For now, just return success (you'll need to implement actual auth logic)
-    console.log('Sign in attempt for:', email); // Safe to log email for development
+    console.log('User successfully signed in:', user.email); // Safe to log email for development
     
     res.status(200).json({ 
       success: true, 
-      message: "Authentication successful" 
+      message: "Authentication successful",
+      user: user.toSafeJSON()
     });
     
   } catch (error) {
     console.error('Authentication error occurred');
     res.status(500).json({ 
       success: false, 
-      message: "Authentication failed" 
+      message: "Authentication failed. Please try again." 
     });
   }
 });
@@ -115,4 +172,21 @@ app.get("/auth/me", async (req, res) => {
 });
 
 const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => console.log(`API listening on :${PORT}`));
+
+// Initialize database connection and start server
+async function startServer() {
+  const dbConnected = await initializeDatabase();
+  
+  if (!dbConnected) {
+    console.error('❌ Failed to connect to database. Exiting...');
+    process.exit(1);
+  }
+  
+  app.listen(PORT, () => {
+    console.log(`🚀 API listening on :${PORT}`);
+    console.log('📊 Database connected successfully');
+    console.log('🔒 HIPAA-compliant security features enabled');
+  });
+}
+
+startServer();
