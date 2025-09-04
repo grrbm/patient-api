@@ -16,7 +16,7 @@ const app = express();
 // HIPAA-compliant CORS configuration
 app.use(cors({
   origin: process.env.NODE_ENV === 'production' 
-    ? ['https://your-frontend-app.on-aptible.com'] // Update with your actual Aptible frontend URL
+    ? [process.env.FRONTEND_URL || 'https://app-95863.on-aptible.com'] // Use env var or default frontend URL
     : ['http://localhost:3000'], // Allow local frontend during development
   credentials: true, // Allow cookies for httpOnly session management
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
