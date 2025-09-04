@@ -46,6 +46,7 @@ export const sessionConfig = session({
     httpOnly: true, // Prevent XSS attacks
     maxAge: 30 * 60 * 1000, // 30 minutes (HIPAA compliance - short session timeout)
     sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'strict', // Allow cross-site cookies in production for Aptible domains
+    domain: process.env.NODE_ENV === 'production' ? '.on-aptible.com' : undefined, // Allow sharing across Aptible subdomains
   },
   
   // Session cleanup
@@ -72,15 +73,28 @@ export const updateLastActivity = (req: any, res: any, next: any) => {
 };
 
 // Helper function to create user session
-export const createUserSession = (req: any, user: any) => {
-  req.session.userId = user.id;
-  req.session.userEmail = user.email;
-  req.session.userRole = user.role;
-  req.session.loginTime = new Date();
-  req.session.lastActivity = new Date();
-  
-  // Don't log PHI - only log non-sensitive session info
-  console.log(`Session created for user: ${user.email}`);
+export const createUserSession = (req: any, user: any): Promise<void> => {
+  return new Promise((resolve, reject) => {
+    req.session.userId = user.id;
+    req.session.userEmail = user.email;
+    req.session.userRole = user.role;
+    req.session.loginTime = new Date();
+    req.session.lastActivity = new Date();
+    
+    // Explicitly save the session to ensure cookie is set
+    req.session.save((err: any) => {
+      if (err) {
+        console.error('Failed to save session:', err);
+        reject(err);
+      } else {
+        console.log(`Session saved successfully for user: ${user.email}`);
+        resolve();
+      }
+    });
+    
+    // Don't log PHI - only log non-sensitive session info
+    console.log(`Session created for user: ${user.email}`);
+  });
 };
 
 // Helper function to destroy user session

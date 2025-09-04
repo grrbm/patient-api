@@ -137,8 +137,11 @@ app.post("/auth/signin", async (req, res) => {
     await user.updateLastLogin();
     
     // Create secure session
-    createUserSession(req, user);
+    await createUserSession(req, user);
     
+    // Debug session creation
+    console.log('Session created - ID:', req.sessionID);
+    console.log('User ID stored in session:', req.session?.userId);
     console.log('User successfully signed in:', user.email); // Safe to log email for development
     
     res.status(200).json({ 
@@ -176,6 +179,11 @@ app.post("/auth/signout", async (req, res) => {
 
 app.get("/auth/me", async (req, res) => {
   try {
+    // Debug session info (temporarily for troubleshooting)
+    console.log('Session ID:', req.sessionID);
+    console.log('Session data:', req.session ? 'exists' : 'missing');
+    console.log('User ID in session:', req.session?.userId);
+    
     // Check if user is authenticated via session
     if (!isAuthenticated(req)) {
       return res.status(401).json({ 
