@@ -45,7 +45,7 @@ export const sessionConfig = session({
     secure: process.env.NODE_ENV === 'production', // HTTPS only in production
     httpOnly: true, // Prevent XSS attacks
     maxAge: 30 * 60 * 1000, // 30 minutes (HIPAA compliance - short session timeout)
-    sameSite: 'strict', // CSRF protection
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'strict', // Allow cross-site cookies in production for Aptible domains
   },
   
   // Session cleanup
