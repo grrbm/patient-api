@@ -10,16 +10,25 @@ if (!databaseUrl) {
   throw new Error('DATABASE_URL environment variable is required');
 }
 
+// Check if we're connecting to localhost (Aptible tunnel)
+const isLocalhost = databaseUrl.includes('localhost') || databaseUrl.includes('127.0.0.1');
+
 // HIPAA-compliant database connection
 const sequelizeConfig = {
   dialect: 'postgres' as const,
   dialectOptions: {
-    // Aptible SSL configuration for production
+    // SSL configuration: 
+    // - Production (Aptible): require SSL with relaxed validation
+    // - Localhost tunnel: use SSL but don't require it
+    // - Development: no SSL
     ssl: process.env.NODE_ENV === 'production' ? {
       require: true,
       rejectUnauthorized: false,
       ca: undefined, // Don't validate CA certificate
       checkServerIdentity: () => undefined, // Skip hostname verification
+    } : isLocalhost ? {
+      require: false, // Don't require SSL for localhost tunnel
+      rejectUnauthorized: false,
     } : false,
   },
   logging: false, // Don't log SQL queries in production (could contain PHI)
