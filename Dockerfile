@@ -48,6 +48,7 @@ COPY --from=build /app/dist ./dist
 
 # config + migrations for sequelize CLI
 COPY package.json yarn.lock ./
+COPY .sequelizerc ./
 COPY sequelize.config.cjs ./
 COPY migrations ./migrations
 
