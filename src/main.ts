@@ -160,6 +160,9 @@ app.post("/auth/signin", async (req, res) => {
     console.log('User ID stored in session:', req.session?.userId);
     console.log('User successfully signed in:', user.email); // Safe to log email for development
     
+    // Debug response headers
+    console.log('Response headers being sent:', JSON.stringify(res.getHeaders(), null, 2));
+    
     res.status(200).json({ 
       success: true, 
       message: "Authentication successful",
