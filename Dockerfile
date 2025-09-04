@@ -6,19 +6,24 @@
 FROM node:22-alpine AS base
 WORKDIR /app
 ENV CI=1
-COPY package*.json ./
+
+# Enable Corepack for Yarn
+RUN corepack enable
+
+# Copy package files
+COPY package.json yarn.lock ./
 
 ############################
 # 2) Production deps
 ############################
 FROM base AS deps-prod
-RUN npm ci --omit=dev
+RUN yarn install --frozen-lockfile --production
 
 ############################
 # 3) Build deps
 ############################
 FROM base AS deps-build
-RUN npm ci
+RUN yarn install --frozen-lockfile
 
 ############################
 # 4) Compile TypeScript
@@ -26,7 +31,7 @@ RUN npm ci
 FROM deps-build AS build
 COPY tsconfig.json ./
 COPY src ./src
-RUN npm run build
+RUN yarn build
 
 ############################
 # 5) Runtime image
@@ -42,7 +47,7 @@ COPY --from=deps-prod /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 
 # config + migrations for sequelize CLI
-COPY package*.json ./
+COPY package.json yarn.lock ./
 COPY sequelize.config.cjs ./
 COPY migrations ./migrations
 
