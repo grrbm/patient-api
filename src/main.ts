@@ -13,18 +13,34 @@ if (process.env.NODE_ENV === 'production') {
 
 const app = express();
 
-// HIPAA-compliant CORS configuration
+// HIPAA-compliant CORS configuration with explicit origin whitelisting
 app.use(cors({
-  origin: process.env.NODE_ENV === 'production' 
-    ? [
-        process.env.FRONTEND_URL || 'https://app-95863.on-aptible.com',
-        'https://app-95883.on-aptible.com', // Current frontend URL
-        /^https:\/\/app-\d+\.on-aptible\.com$/ // Allow any Aptible app URL pattern for deployment flexibility
-      ]
-    : ['http://localhost:3000'], // Allow local frontend during development
-  credentials: true, // Allow cookies for httpOnly session management
+  origin: (origin, callback) => {
+    // Allow requests with no origin (mobile apps, curl, Postman, etc.)
+    if (!origin) return callback(null, true);
+    
+    const allowedOrigins = process.env.NODE_ENV === 'production' 
+      ? [
+          process.env.FRONTEND_URL || 'https://app-95863.on-aptible.com',
+          'https://app-95883.on-aptible.com', // Current frontend URL
+        ]
+      : ['http://localhost:3000']; // Allow local frontend during development
+    
+    // Check if origin is in allowed list or matches Aptible pattern
+    const isAllowed = allowedOrigins.includes(origin) || 
+                     (process.env.NODE_ENV === 'production' && /^https:\/\/app-\d+\.on-aptible\.com$/.test(origin));
+    
+    if (isAllowed) {
+      callback(null, true);
+    } else {
+      console.log(`CORS blocked origin: ${origin}`);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true, // Essential for cookies
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Cookie'],
+  exposedHeaders: ['Set-Cookie'],
 }));
 
 app.use(helmet());
