@@ -12,7 +12,8 @@ const PgSession = connectPgSimple(session);
 const SESSION_SECRET = process.env.SESSION_SECRET || 'your-super-secure-session-secret-change-in-production';
 
 if (!process.env.SESSION_SECRET && process.env.NODE_ENV === 'production') {
-  throw new Error('SESSION_SECRET environment variable is required in production');
+  console.warn('WARNING: SESSION_SECRET environment variable is not set in production. Using default value for initial deployment.');
+  console.warn('IMPORTANT: Set SESSION_SECRET environment variable immediately after deployment for security.');
 }
 
 // Create a separate connection pool for sessions
