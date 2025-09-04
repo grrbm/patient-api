@@ -11,12 +11,13 @@ if (!databaseUrl) {
 }
 
 // HIPAA-compliant database connection
-export const sequelize = new Sequelize(databaseUrl, {
-  dialect: 'postgres',
+const sequelizeConfig = {
+  dialect: 'postgres' as const,
   dialectOptions: {
+    // Aptible requires SSL even through tunnel
     ssl: {
       require: true,
-      rejectUnauthorized: false, // Required for Aptible
+      rejectUnauthorized: false,
     },
   },
   logging: false, // Don't log SQL queries in production (could contain PHI)
@@ -26,7 +27,9 @@ export const sequelize = new Sequelize(databaseUrl, {
     acquire: 30000,
     idle: 10000,
   },
-});
+};
+
+export const sequelize = new Sequelize(databaseUrl, sequelizeConfig);
 
 export async function initializeDatabase() {
   try {
