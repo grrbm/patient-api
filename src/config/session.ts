@@ -19,9 +19,11 @@ if (!process.env.SESSION_SECRET && process.env.NODE_ENV === 'production') {
 // Create a separate connection pool for sessions
 const sessionPool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: {
+  ssl: process.env.NODE_ENV === 'production' ? {
     rejectUnauthorized: false,
-  },
+    ca: undefined,
+    checkServerIdentity: () => undefined,
+  } : false,
 });
 
 // HIPAA-compliant session configuration

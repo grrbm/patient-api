@@ -14,11 +14,13 @@ if (!databaseUrl) {
 const sequelizeConfig = {
   dialect: 'postgres' as const,
   dialectOptions: {
-    // Aptible requires SSL even through tunnel
-    ssl: {
+    // Aptible SSL configuration for production
+    ssl: process.env.NODE_ENV === 'production' ? {
       require: true,
       rejectUnauthorized: false,
-    },
+      ca: undefined, // Don't validate CA certificate
+      checkServerIdentity: () => undefined, // Skip hostname verification
+    } : false,
   },
   logging: false, // Don't log SQL queries in production (could contain PHI)
   pool: {
