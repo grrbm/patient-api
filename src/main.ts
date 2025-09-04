@@ -196,8 +196,7 @@ app.get("/auth/me", authenticateJWT, async (req, res) => {
     // Optionally fetch fresh user data from database
     const user = await User.findByPk(currentUser?.id);
     if (!user) {
-      // User was deleted from database but session still exists
-      destroyUserSession(req);
+      // User was deleted from database but JWT token still exists
       return res.status(401).json({ 
         success: false, 
         message: "User not found" 
