@@ -3,6 +3,7 @@ import helmet from "helmet";
 import cors from "cors";
 import { initializeDatabase } from "./config/database";
 import { User } from "./models/User";
+import { sessionConfig, updateLastActivity, createUserSession, destroyUserSession, isAuthenticated, getCurrentUser } from "./config/session";
 
 const app = express();
 
@@ -18,6 +19,10 @@ app.use(cors({
 
 app.use(helmet());
 app.use(express.json()); // Parse JSON bodies
+
+// HIPAA-compliant session management
+app.use(sessionConfig);
+app.use(updateLastActivity);
 
 // Health check endpoint
 app.get("/healthz", (_req, res) => res.status(200).send("ok"));
@@ -55,7 +60,7 @@ app.post("/auth/signup", async (req, res) => {
       phoneNumber,
     });
 
-    console.log('User successfully registered:', user.email); // Safe to log email for development
+    console.log('User successfully registered with email:', user.email); // Safe to log email for development
     
     res.status(201).json({ 
       success: true, 
@@ -121,6 +126,9 @@ app.post("/auth/signin", async (req, res) => {
     // Update last login time
     await user.updateLastLogin();
     
+    // Create secure session
+    createUserSession(req, user);
+    
     console.log('User successfully signed in:', user.email); // Safe to log email for development
     
     res.status(200).json({ 
@@ -140,7 +148,9 @@ app.post("/auth/signin", async (req, res) => {
 
 app.post("/auth/signout", async (req, res) => {
   try {
-    // TODO: Implement session cleanup
+    // Destroy session
+    destroyUserSession(req);
+    
     res.status(200).json({ 
       success: true, 
       message: "Signed out successfully" 
@@ -156,12 +166,33 @@ app.post("/auth/signout", async (req, res) => {
 
 app.get("/auth/me", async (req, res) => {
   try {
-    // TODO: Implement session validation and user data retrieval
-    // For now, return unauthorized
-    res.status(401).json({ 
-      success: false, 
-      message: "Not authenticated" 
+    // Check if user is authenticated via session
+    if (!isAuthenticated(req)) {
+      return res.status(401).json({ 
+        success: false, 
+        message: "Not authenticated" 
+      });
+    }
+
+    // Get user data from session
+    const currentUser = getCurrentUser(req);
+    
+    // Optionally fetch fresh user data from database
+    const user = await User.findByPk(currentUser?.id);
+    if (!user) {
+      // User was deleted from database but session still exists
+      destroyUserSession(req);
+      return res.status(401).json({ 
+        success: false, 
+        message: "User not found" 
+      });
+    }
+
+    res.status(200).json({ 
+      success: true, 
+      user: user.toSafeJSON()
     });
+    
   } catch (error) {
     console.error('Auth check error occurred');
     res.status(500).json({ 

@@ -25,20 +25,20 @@ interface UserCreationAttributes extends Optional<UserAttributes, 'id' | 'create
 
 // User model class with HIPAA-compliant methods
 export class User extends Model<UserAttributes, UserCreationAttributes> implements UserAttributes {
-  public id!: string;
-  public firstName!: string;
-  public lastName!: string;
-  public email!: string;
-  public passwordHash!: string;
-  public dob?: string;
-  public phoneNumber?: string;
-  public address?: string;
-  public role!: 'patient' | 'doctor' | 'admin';
-  public lastLoginAt?: Date;
-  public consentGivenAt?: Date;
-  public emergencyContact?: string;
-  public createdAt!: Date;
-  public updatedAt!: Date;
+  declare id: string;
+  declare firstName: string;
+  declare lastName: string;
+  declare email: string;
+  declare passwordHash: string;
+  declare dob?: string;
+  declare phoneNumber?: string;
+  declare address?: string;
+  declare role: 'patient' | 'doctor' | 'admin';
+  declare lastLoginAt?: Date;
+  declare consentGivenAt?: Date;
+  declare emergencyContact?: string;
+  declare createdAt: Date;
+  declare updatedAt: Date;
 
   // Instance methods
   public async validatePassword(password: string): Promise<boolean> {
