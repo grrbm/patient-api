@@ -217,6 +217,61 @@ app.get("/auth/me", authenticateJWT, async (req, res) => {
   }
 });
 
+// User profile update endpoint
+app.put("/auth/profile", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "Not authenticated"
+      });
+    }
+
+    const { firstName, lastName, phoneNumber, dob } = req.body;
+
+    // HIPAA Compliance: Validate required fields
+    if (!firstName || !lastName) {
+      return res.status(400).json({
+        success: false,
+        message: "First name and last name are required"
+      });
+    }
+
+    // Find user in database
+    const user = await User.findByPk(currentUser.id);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found"
+      });
+    }
+
+    // Update user profile (only allow certain fields to be updated)
+    await user.update({
+      firstName: firstName.trim(),
+      lastName: lastName.trim(),
+      phoneNumber: phoneNumber?.trim() || null,
+      dob: dob?.trim() || null,
+    });
+
+    console.log('Profile updated for user:', user.email); // Safe - no PHI
+
+    res.status(200).json({
+      success: true,
+      message: "Profile updated successfully",
+      user: user.toSafeJSON()
+    });
+
+  } catch (error) {
+    console.error('Profile update error occurred');
+    res.status(500).json({
+      success: false,
+      message: "Failed to update profile"
+    });
+  }
+});
+
 const PORT = process.env.PORT || 3001;
 
 // Initialize database connection and start server
