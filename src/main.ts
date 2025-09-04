@@ -3,7 +3,7 @@ import helmet from "helmet";
 import cors from "cors";
 import { initializeDatabase } from "./config/database";
 import { User } from "./models/User";
-import { sessionConfig, updateLastActivity, createUserSession, destroyUserSession, isAuthenticated, getCurrentUser } from "./config/session";
+import { createJWTToken, authenticateJWT, getCurrentUser } from "./config/jwt";
 
 // Aptible SSL workaround - disable SSL certificate validation in production
 // This is safe within Aptible's secure network environment
@@ -46,9 +46,7 @@ app.use(cors({
 app.use(helmet());
 app.use(express.json()); // Parse JSON bodies
 
-// HIPAA-compliant session management
-app.use(sessionConfig);
-app.use(updateLastActivity);
+// No session middleware needed for JWT
 
 // Health check endpoint
 app.get("/healthz", (_req, res) => res.status(200).send("ok"));
@@ -152,20 +150,15 @@ app.post("/auth/signin", async (req, res) => {
     // Update last login time
     await user.updateLastLogin();
     
-    // Create secure session
-    await createUserSession(req, user);
+    // Create JWT token
+    const token = createJWTToken(user);
     
-    // Debug session creation
-    console.log('Session created - ID:', req.sessionID);
-    console.log('User ID stored in session:', req.session?.userId);
-    console.log('User successfully signed in:', user.email); // Safe to log email for development
-    
-    // Debug response headers
-    console.log('Response headers being sent:', JSON.stringify(res.getHeaders(), null, 2));
+    console.log('JWT token created for user:', user.email); // Safe to log email for development
     
     res.status(200).json({ 
       success: true, 
       message: "Authentication successful",
+      token: token,
       user: user.toSafeJSON()
     });
     
@@ -178,11 +171,10 @@ app.post("/auth/signin", async (req, res) => {
   }
 });
 
-app.post("/auth/signout", async (req, res) => {
+app.post("/auth/signout", async (_req, res) => {
   try {
-    // Destroy session
-    destroyUserSession(req);
-    
+    // With JWT, signout is handled client-side by removing the token
+    // No server-side session to destroy
     res.status(200).json({ 
       success: true, 
       message: "Signed out successfully" 
@@ -196,23 +188,9 @@ app.post("/auth/signout", async (req, res) => {
   }
 });
 
-app.get("/auth/me", async (req, res) => {
+app.get("/auth/me", authenticateJWT, async (req, res) => {
   try {
-    // Debug session info (temporarily for troubleshooting)
-    console.log('Session ID:', req.sessionID);
-    console.log('Session data:', req.session ? 'exists' : 'missing');
-    console.log('User ID in session:', req.session?.userId);
-    console.log('Cookies received:', req.headers.cookie || 'No cookies');
-    
-    // Check if user is authenticated via session
-    if (!isAuthenticated(req)) {
-      return res.status(401).json({ 
-        success: false, 
-        message: "Not authenticated" 
-      });
-    }
-
-    // Get user data from session
+    // Get user data from JWT
     const currentUser = getCurrentUser(req);
     
     // Optionally fetch fresh user data from database
