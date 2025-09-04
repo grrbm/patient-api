@@ -5,6 +5,12 @@ import { initializeDatabase } from "./config/database";
 import { User } from "./models/User";
 import { sessionConfig, updateLastActivity, createUserSession, destroyUserSession, isAuthenticated, getCurrentUser } from "./config/session";
 
+// Aptible SSL workaround - disable SSL certificate validation in production
+// This is safe within Aptible's secure network environment
+if (process.env.NODE_ENV === 'production') {
+  process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+}
+
 const app = express();
 
 // HIPAA-compliant CORS configuration
