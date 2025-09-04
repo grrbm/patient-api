@@ -1,6 +1,10 @@
 import session from 'express-session';
 import connectPgSimple from 'connect-pg-simple';
-import { sequelize } from './database';
+import { Pool } from 'pg';
+import dotenv from 'dotenv';
+
+// Load environment variables
+dotenv.config({ path: '.env.local' });
 
 const PgSession = connectPgSimple(session);
 
@@ -11,10 +15,18 @@ if (!process.env.SESSION_SECRET && process.env.NODE_ENV === 'production') {
   throw new Error('SESSION_SECRET environment variable is required in production');
 }
 
+// Create a separate connection pool for sessions
+const sessionPool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: {
+    rejectUnauthorized: false,
+  },
+});
+
 // HIPAA-compliant session configuration
 export const sessionConfig = session({
   store: new PgSession({
-    pool: sequelize.connectionManager.pool,
+    pool: sessionPool,
     tableName: 'session',
     createTableIfMissing: false, // We created it via migration
   }),
