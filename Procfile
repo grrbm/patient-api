@@ -1,2 +1,2 @@
-web: node backend/dist/main.js
+web: node dist/main.js
 # worker: node dist/worker.js
