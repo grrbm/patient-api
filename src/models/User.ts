@@ -169,6 +169,18 @@ User.init(
       type: DataTypes.TEXT,
       allowNull: true,
     },
+    city: {
+      type: DataTypes.STRING(100),
+      allowNull: true,
+    },
+    state: {
+      type: DataTypes.STRING(50),
+      allowNull: true,
+    },
+    zipCode: {
+      type: DataTypes.STRING(20),
+      allowNull: true,
+    },
     role: {
       type: DataTypes.ENUM('patient', 'doctor', 'admin'),
       allowNull: false,
