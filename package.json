@@ -4,7 +4,11 @@
     "start": "node dist/main.js",
     "migrate": "sequelize db:migrate",
     "migrate:undo": "sequelize db:migrate:undo",
-    "dev": "ts-node-dev --respawn src/main.ts"
+    "dev": "ts-node-dev --respawn src/main.ts",
+    "pm2:start": "NODE_ENV=production NODE_OPTIONS='--max-old-space-size=1024 --no-warnings' pm2 start dist/main.js -i 1 --name patient-api",
+    "pm2:reload": "NODE_ENV=production NODE_OPTIONS='--max-old-space-size=1024 --no-warnings' pm2 reload patient-api",
+    "pm2:reload-no-build": "NODE_ENV=production NODE_OPTIONS='--max-old-space-size=1024 --no-warnings' pm2 reload patient-api",
+    "pm2:stop": "pm2 stop patient-api"
   },
   "dependencies": {
     "@types/jsonwebtoken": "^9.0.10",
