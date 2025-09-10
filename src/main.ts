@@ -24,7 +24,11 @@ app.use(cors({
           process.env.FRONTEND_URL || 'https://app-95863.on-aptible.com',
           'https://app-95883.on-aptible.com', // Current frontend URL
         ]
-      : ['http://localhost:3000']; // Allow local frontend during development
+      : [
+          'http://localhost:3000', 
+          'http://localhost:3001', 
+          'http://localhost:3002'
+        ]; // Allow local frontend during development
     
     // Check if origin is in allowed list or matches Aptible pattern
     const isAllowed = allowedOrigins.includes(origin) || 
