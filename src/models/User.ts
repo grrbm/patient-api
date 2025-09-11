@@ -1,6 +1,8 @@
 import { DataTypes, Model, Optional } from 'sequelize';
 import { sequelize } from '../config/database';
 import bcrypt from 'bcrypt';
+import Entity from './Entity';
+import { Table } from 'sequelize-typescript';
 
 // User attributes interface
 export interface UserAttributes {
@@ -114,6 +116,15 @@ export class User extends Model<UserAttributes, UserCreationAttributes> implemen
       where: { email: email.toLowerCase().trim() }
     });
   }
+}
+
+//This is the class that will be used to create the user table
+//This file should be refactored to use the sequelize-typescript library
+//So it can be more readable and maintainable
+@Table({
+  freezeTableName: true,
+})
+export default class User1 extends Entity {
 }
 
 // Initialize the model
