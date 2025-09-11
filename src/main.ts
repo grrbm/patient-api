@@ -327,6 +327,137 @@ app.put("/auth/profile", authenticateJWT, async (req, res) => {
   }
 });
 
+// Clinic routes
+app.get("/clinic/:id", authenticateJWT, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const currentUser = getCurrentUser(req);
+
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "Not authenticated"
+      });
+    }
+
+    // Fetch full user data from database to get clinicId
+    const user = await User.findByPk(currentUser.id);
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: "User not found"
+      });
+    }
+
+    // Only allow doctors to access clinic data, and only their own clinic
+    if (user.role !== 'doctor' || user.clinicId !== id) {
+      return res.status(403).json({
+        success: false,
+        message: "Access denied"
+      });
+    }
+
+    const clinic = await Clinic.findByPk(id);
+    if (!clinic) {
+      return res.status(404).json({
+        success: false,
+        message: "Clinic not found"
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: {
+        id: clinic.id,
+        name: clinic.name,
+        slug: clinic.slug,
+        logo: clinic.logo,
+      }
+    });
+
+  } catch (error) {
+    console.error('Error fetching clinic data');
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch clinic data"
+    });
+  }
+});
+
+app.put("/clinic/:id", authenticateJWT, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, logo } = req.body;
+    const currentUser = getCurrentUser(req);
+
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "Not authenticated"
+      });
+    }
+
+    // Fetch full user data from database to get clinicId
+    const user = await User.findByPk(currentUser.id);
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: "User not found"
+      });
+    }
+
+    // Only allow doctors to update clinic data, and only their own clinic
+    if (user.role !== 'doctor' || user.clinicId !== id) {
+      return res.status(403).json({
+        success: false,
+        message: "Access denied"
+      });
+    }
+
+    // Validate input
+    if (!name || !name.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "Clinic name is required"
+      });
+    }
+
+    const clinic = await Clinic.findByPk(id);
+    if (!clinic) {
+      return res.status(404).json({
+        success: false,
+        message: "Clinic not found"
+      });
+    }
+
+    // Update clinic data
+    await clinic.update({
+      name: name.trim(),
+      logo: logo?.trim() || '',
+    });
+
+    console.log('🏥 Clinic updated:', { id: clinic.id, name: clinic.name });
+
+    res.status(200).json({
+      success: true,
+      message: "Clinic updated successfully",
+      data: {
+        id: clinic.id,
+        name: clinic.name,
+        slug: clinic.slug,
+        logo: clinic.logo,
+      }
+    });
+
+  } catch (error) {
+    console.error('Error updating clinic data');
+    res.status(500).json({
+      success: false,
+      message: "Failed to update clinic data"
+    });
+  }
+});
+
 const PORT = process.env.PORT || 3001;
 
 // Initialize database connection and start server

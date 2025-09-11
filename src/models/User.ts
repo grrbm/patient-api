@@ -148,6 +148,7 @@ export default class User extends Entity {
       state: this.state,
       zipCode: this.zipCode,
       role: this.role,
+      clinicId: this.clinicId,
       createdAt: this.createdAt,
       lastLoginAt: this.lastLoginAt,
     };
