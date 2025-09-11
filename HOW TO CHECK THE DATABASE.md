@@ -1,7 +1,9 @@
 # STEP 1: Run a Tunnel
 
-aptible db:tunnel patient-api-staging-postgresql --port 5433
+ssh -fNv -i ~/.ssh/FuseHealth-Pem-Key.pem \
+ -L 127.0.0.1:55432:database-1.cv8g82kya3xt.us-east-2.rds.amazonaws.com:5432 \
+ec2-user@3.146.121.203
 
 # STEP 2: Configure pgAdmin / Beekeeper Studio
 
-Use the port you defined above (5433) and localhost address for the Host: 127.0.0.1
+Use the port you defined above (55432) and localhost address for the Host: 127.0.0.1
