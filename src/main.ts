@@ -18,18 +18,20 @@ app.use(cors({
   origin: (origin, callback) => {
     // Allow requests with no origin (mobile apps, curl, Postman, etc.)
     if (!origin) return callback(null, true);
-    
-    const allowedOrigins = process.env.NODE_ENV === 'production' 
+
+    const allowedOrigins = process.env.NODE_ENV === 'production'
       ? [
-          process.env.FRONTEND_URL || 'https://app-95863.on-aptible.com',
-          'https://app-95883.on-aptible.com', // Current frontend URL
-        ]
-      : ['http://localhost:3000']; // Allow local frontend during development
-    
+        process.env.FRONTEND_URL || 'https://app-95863.on-aptible.com',
+        'https://app-95883.on-aptible.com', // Current frontend URL
+        'http://3.140.178.30', // Add your frontend IP
+        'https://unboundedhealth.xyz', // Add unboundedhealth.xyz
+      ]
+      : ['http://localhost:3000', 'http://3.140.178.30', 'https://unboundedhealth.xyz']; // Allow local frontend, your IP, and unboundedhealth.xyz during development
+
     // Check if origin is in allowed list or matches Aptible pattern
-    const isAllowed = allowedOrigins.includes(origin) || 
-                     (process.env.NODE_ENV === 'production' && /^https:\/\/app-\d+\.on-aptible\.com$/.test(origin));
-    
+    const isAllowed = allowedOrigins.includes(origin) ||
+      (process.env.NODE_ENV === 'production' && /^https:\/\/app-\d+\.on-aptible\.com$/.test(origin));
+
     if (isAllowed) {
       callback(null, true);
     } else {
@@ -55,12 +57,12 @@ app.get("/healthz", (_req, res) => res.status(200).send("ok"));
 app.post("/auth/signup", async (req, res) => {
   try {
     const { firstName, lastName, email, password, role, dateOfBirth, phoneNumber } = req.body;
-    
+
     // Basic validation
     if (!firstName || !lastName || !email || !password) {
-      return res.status(400).json({ 
-        success: false, 
-        message: "Missing required fields" 
+      return res.status(400).json({
+        success: false,
+        message: "Missing required fields"
       });
     }
 
@@ -85,17 +87,17 @@ app.post("/auth/signup", async (req, res) => {
     });
 
     console.log('User successfully registered with email:', user.email); // Safe to log email for development
-    
-    res.status(201).json({ 
-      success: true, 
+
+    res.status(201).json({
+      success: true,
       message: "User registered successfully",
       user: user.toSafeJSON() // Return safe user data
     });
-    
+
   } catch (error: any) {
     // HIPAA Compliance: Don't log the actual error details that might contain PHI
     console.error('Registration error occurred:', error.name);
-    
+
     // Handle specific database errors
     if (error.name === 'SequelizeUniqueConstraintError') {
       return res.status(409).json({
@@ -103,17 +105,17 @@ app.post("/auth/signup", async (req, res) => {
         message: "User with this email already exists"
       });
     }
-    
+
     if (error.name === 'SequelizeValidationError') {
       return res.status(400).json({
         success: false,
         message: "Invalid user data provided"
       });
     }
-    
-    res.status(500).json({ 
-      success: false, 
-      message: "Registration failed. Please try again." 
+
+    res.status(500).json({
+      success: false,
+      message: "Registration failed. Please try again."
     });
   }
 });
@@ -121,11 +123,11 @@ app.post("/auth/signup", async (req, res) => {
 app.post("/auth/signin", async (req, res) => {
   try {
     const { email, password } = req.body;
-    
+
     if (!email || !password) {
-      return res.status(400).json({ 
-        success: false, 
-        message: "Email and password are required" 
+      return res.status(400).json({
+        success: false,
+        message: "Email and password are required"
       });
     }
 
@@ -149,24 +151,24 @@ app.post("/auth/signin", async (req, res) => {
 
     // Update last login time
     await user.updateLastLogin();
-    
+
     // Create JWT token
     const token = createJWTToken(user);
-    
+
     console.log('JWT token created for user:', user.email); // Safe to log email for development
-    
-    res.status(200).json({ 
-      success: true, 
+
+    res.status(200).json({
+      success: true,
       message: "Authentication successful",
       token: token,
       user: user.toSafeJSON()
     });
-    
+
   } catch (error) {
     console.error('Authentication error occurred');
-    res.status(500).json({ 
-      success: false, 
-      message: "Authentication failed. Please try again." 
+    res.status(500).json({
+      success: false,
+      message: "Authentication failed. Please try again."
     });
   }
 });
@@ -175,15 +177,15 @@ app.post("/auth/signout", async (_req, res) => {
   try {
     // With JWT, signout is handled client-side by removing the token
     // No server-side session to destroy
-    res.status(200).json({ 
-      success: true, 
-      message: "Signed out successfully" 
+    res.status(200).json({
+      success: true,
+      message: "Signed out successfully"
     });
   } catch (error) {
     console.error('Sign out error occurred');
-    res.status(500).json({ 
-      success: false, 
-      message: "Sign out failed" 
+    res.status(500).json({
+      success: false,
+      message: "Sign out failed"
     });
   }
 });
@@ -192,27 +194,27 @@ app.get("/auth/me", authenticateJWT, async (req, res) => {
   try {
     // Get user data from JWT
     const currentUser = getCurrentUser(req);
-    
+
     // Optionally fetch fresh user data from database
     const user = await User.findByPk(currentUser?.id);
     if (!user) {
       // User was deleted from database but JWT token still exists
-      return res.status(401).json({ 
-        success: false, 
-        message: "User not found" 
+      return res.status(401).json({
+        success: false,
+        message: "User not found"
       });
     }
 
-    res.status(200).json({ 
-      success: true, 
+    res.status(200).json({
+      success: true,
       user: user.toSafeJSON()
     });
-    
+
   } catch (error) {
     console.error('Auth check error occurred');
-    res.status(500).json({ 
-      success: false, 
-      message: "Auth check failed" 
+    res.status(500).json({
+      success: false,
+      message: "Auth check failed"
     });
   }
 });
@@ -281,12 +283,12 @@ const PORT = process.env.PORT || 3001;
 // Initialize database connection and start server
 async function startServer() {
   const dbConnected = await initializeDatabase();
-  
+
   if (!dbConnected) {
     console.error('❌ Failed to connect to database. Exiting...');
     process.exit(1);
   }
-  
+
   app.listen(PORT, () => {
     console.log(`🚀 API listening on :${PORT}`);
     console.log('📊 Database connected successfully');
