@@ -2,10 +2,12 @@ import "reflect-metadata";
 import express from "express";
 import helmet from "helmet";
 import cors from "cors";
+import multer from "multer";
 import { initializeDatabase } from "./config/database";
 import User from "./models/User";
 import Clinic from "./models/Clinic";
 import { createJWTToken, authenticateJWT, getCurrentUser } from "./config/jwt";
+import { uploadToS3, deleteFromS3, isValidImageFile, isValidFileSize } from "./config/s3";
 
 // Helper function to generate unique clinic slug
 async function generateUniqueSlug(clinicName: string, excludeId?: string): Promise<string> {
@@ -52,6 +54,21 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 const app = express();
+
+// Configure multer for file uploads (store in memory)
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5MB limit
+  },
+  fileFilter: (req, file, cb) => {
+    if (isValidImageFile(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Invalid file type. Only JPEG, PNG, and WebP images are allowed.'));
+    }
+  },
+});
 
 // HIPAA-compliant CORS configuration with explicit origin whitelisting
 app.use(cors({
@@ -498,6 +515,103 @@ app.put("/clinic/:id", authenticateJWT, async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to update clinic data"
+    });
+  }
+});
+
+// Clinic logo upload endpoint
+app.post("/clinic/:id/upload-logo", authenticateJWT, upload.single('logo'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const currentUser = getCurrentUser(req);
+
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "Not authenticated"
+      });
+    }
+
+    // Fetch full user data from database to get clinicId
+    const user = await User.findByPk(currentUser.id);
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: "User not found"
+      });
+    }
+
+    // Only allow doctors to upload logos for their own clinic
+    if (user.role !== 'doctor' || user.clinicId !== id) {
+      return res.status(403).json({
+        success: false,
+        message: "Access denied"
+      });
+    }
+
+    // Check if file was uploaded
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: "No file uploaded"
+      });
+    }
+
+    // Validate file size (additional check)
+    if (!isValidFileSize(req.file.size)) {
+      return res.status(400).json({
+        success: false,
+        message: "File too large. Maximum size is 5MB."
+      });
+    }
+
+    const clinic = await Clinic.findByPk(id);
+    if (!clinic) {
+      return res.status(404).json({
+        success: false,
+        message: "Clinic not found"
+      });
+    }
+
+    // Delete old logo from S3 if it exists
+    if (clinic.logo && clinic.logo.trim() !== '') {
+      try {
+        await deleteFromS3(clinic.logo);
+        console.log('🗑️ Old logo deleted from S3');
+      } catch (error) {
+        console.error('Warning: Failed to delete old logo from S3:', error);
+        // Don't fail the entire request if deletion fails
+      }
+    }
+
+    // Upload new logo to S3
+    const logoUrl = await uploadToS3(
+      req.file.buffer,
+      req.file.originalname,
+      req.file.mimetype
+    );
+
+    // Update clinic with new logo URL
+    await clinic.update({ logo: logoUrl });
+
+    console.log('🏥 Logo uploaded for clinic:', { id: clinic.id, logoUrl });
+
+    res.status(200).json({
+      success: true,
+      message: "Logo uploaded successfully",
+      data: {
+        id: clinic.id,
+        name: clinic.name,
+        slug: clinic.slug,
+        logo: clinic.logo,
+      }
+    });
+
+  } catch (error) {
+    console.error('Error uploading logo:', error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to upload logo"
     });
   }
 });
