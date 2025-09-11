@@ -7,6 +7,44 @@ import User from "./models/User";
 import Clinic from "./models/Clinic";
 import { createJWTToken, authenticateJWT, getCurrentUser } from "./config/jwt";
 
+// Helper function to generate unique clinic slug
+async function generateUniqueSlug(clinicName: string, excludeId?: string): Promise<string> {
+  // Generate base slug from clinic name
+  const baseSlug = clinicName.toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
+  
+  // Check if base slug is available
+  const whereClause: any = { slug: baseSlug };
+  if (excludeId) {
+    whereClause.id = { [require('sequelize').Op.ne]: excludeId };
+  }
+  
+  const existingClinic = await Clinic.findOne({ where: whereClause });
+  
+  if (!existingClinic) {
+    return baseSlug;
+  }
+  
+  // If base slug exists, try incremental numbers
+  let counter = 1;
+  while (true) {
+    const slugWithNumber = `${baseSlug}-${counter}`;
+    const whereClauseWithNumber: any = { slug: slugWithNumber };
+    if (excludeId) {
+      whereClauseWithNumber.id = { [require('sequelize').Op.ne]: excludeId };
+    }
+    
+    const existingWithNumber = await Clinic.findOne({ where: whereClauseWithNumber });
+    
+    if (!existingWithNumber) {
+      return slugWithNumber;
+    }
+    
+    counter++;
+  }
+}
+
 // Aptible SSL workaround - disable SSL certificate validation in production
 // This is safe within Aptible's secure network environment
 if (process.env.NODE_ENV === 'production') {
@@ -95,14 +133,12 @@ app.post("/auth/signup", async (req, res) => {
     if (role === 'provider' && clinicName) {
       console.log('🏥 Creating clinic with name:', clinicName);
       
-      // Generate a URL-friendly slug from clinic name
-      const slug = clinicName.toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-|-$/g, '');
+      // Generate unique slug
+      const slug = await generateUniqueSlug(clinicName.trim());
       
       clinic = await Clinic.create({
         name: clinicName.trim(),
-        slug: `${slug}-${Date.now()}`, // Add timestamp to ensure uniqueness
+        slug: slug,
         logo: '', // Default empty logo, can be updated later
       });
       
@@ -430,13 +466,21 @@ app.put("/clinic/:id", authenticateJWT, async (req, res) => {
       });
     }
 
+    // Generate new slug if name changed
+    let newSlug = clinic.slug;
+    if (name.trim() !== clinic.name) {
+      newSlug = await generateUniqueSlug(name.trim(), clinic.id);
+      console.log('🏷️ Generated new slug:', newSlug);
+    }
+
     // Update clinic data
     await clinic.update({
       name: name.trim(),
+      slug: newSlug,
       logo: logo?.trim() || '',
     });
 
-    console.log('🏥 Clinic updated:', { id: clinic.id, name: clinic.name });
+    console.log('🏥 Clinic updated:', { id: clinic.id, name: clinic.name, slug: clinic.slug });
 
     res.status(200).json({
       success: true,
