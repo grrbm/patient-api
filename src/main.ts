@@ -85,14 +85,17 @@ app.use(cors({
       ]
       : ['http://localhost:3000', 'http://3.140.178.30', 'https://unboundedhealth.xyz']; // Allow local frontend, your IP, and unboundedhealth.xyz during development
 
-    // Check if origin is in allowed list or matches Aptible pattern
+    // Check if origin is in allowed list or matches patterns
     const isAllowed = allowedOrigins.includes(origin) ||
-      (process.env.NODE_ENV === 'production' && /^https:\/\/app-\d+\.on-aptible\.com$/.test(origin));
+      (process.env.NODE_ENV === 'production' && /^https:\/\/app-\d+\.on-aptible\.com$/.test(origin)) ||
+      // Allow clinic subdomains in development (e.g., g-healthier.localhost:3000)
+      (process.env.NODE_ENV === 'development' && /^http:\/\/[a-zA-Z0-9-]+\.localhost:3000$/.test(origin));
 
     if (isAllowed) {
+      console.log(`✅ CORS allowed origin: ${origin}`);
       callback(null, true);
     } else {
-      console.log(`CORS blocked origin: ${origin}`);
+      console.log(`❌ CORS blocked origin: ${origin}`);
       callback(new Error('Not allowed by CORS'));
     }
   },
@@ -113,7 +116,7 @@ app.get("/healthz", (_req, res) => res.status(200).send("ok"));
 // Auth routes
 app.post("/auth/signup", async (req, res) => {
   try {
-    const { firstName, lastName, email, password, role, dateOfBirth, phoneNumber, clinicName } = req.body;
+    const { firstName, lastName, email, password, role, dateOfBirth, phoneNumber, clinicName, clinicId } = req.body;
 
     // Basic validation
     if (!firstName || !lastName || !email || !password) {
@@ -143,11 +146,12 @@ app.post("/auth/signup", async (req, res) => {
     }
     console.log('✅ No existing user found, proceeding with registration');
 
-    // Create clinic first if user is a healthcare provider
+    // Handle clinic association
     let clinic = null;
-    let clinicId = null;
+    let finalClinicId = clinicId; // Use provided clinicId from request body
     
-    if (role === 'provider' && clinicName) {
+    // Create clinic if user is a healthcare provider and no clinicId provided
+    if (role === 'provider' && clinicName && !clinicId) {
       console.log('🏥 Creating clinic with name:', clinicName);
       
       // Generate unique slug
@@ -159,13 +163,15 @@ app.post("/auth/signup", async (req, res) => {
         logo: '', // Default empty logo, can be updated later
       });
       
-      clinicId = clinic.id;
+      finalClinicId = clinic.id;
       console.log('✅ Clinic created successfully with ID:', clinic.id);
       console.log('🏥 Created clinic details:', { id: clinic.id, name: clinic.name, slug: clinic.slug });
+    } else if (clinicId) {
+      console.log('🔗 Associating user with existing clinic ID:', clinicId);
     }
 
     // Create new user in database
-    console.log('🚀 Creating new user with data:', { firstName, lastName, email, role: role === 'provider' ? 'doctor' : 'patient', dob: dateOfBirth, phoneNumber, clinicId });
+    console.log('🚀 Creating new user with data:', { firstName, lastName, email, role: role === 'provider' ? 'doctor' : 'patient', dob: dateOfBirth, phoneNumber, finalClinicId });
     const user = await User.createUser({
       firstName,
       lastName,
@@ -176,11 +182,11 @@ app.post("/auth/signup", async (req, res) => {
       phoneNumber,
     });
 
-    // Associate user with clinic if clinic was created
-    if (clinicId) {
-      user.clinicId = clinicId;
+    // Associate user with clinic if one is provided
+    if (finalClinicId) {
+      user.clinicId = finalClinicId;
       await user.save();
-      console.log('🔗 User associated with clinic ID:', clinicId);
+      console.log('🔗 User associated with clinic ID:', finalClinicId);
     }
 
     console.log('✅ User created successfully with ID:', user.id);
@@ -381,6 +387,39 @@ app.put("/auth/profile", authenticateJWT, async (req, res) => {
 });
 
 // Clinic routes
+// Public endpoint to get clinic by slug (for subdomain routing)
+app.get("/clinic/by-slug/:slug", async (req, res) => {
+  try {
+    const { slug } = req.params;
+
+    const clinic = await Clinic.findOne({
+      where: { slug },
+      attributes: ['id', 'name', 'slug', 'logo'] // Only return public fields
+    });
+
+    if (!clinic) {
+      return res.status(404).json({
+        success: false,
+        message: "Clinic not found"
+      });
+    }
+
+    console.log(`✅ Clinic found by slug "${slug}":`, clinic.name);
+
+    res.json({
+      success: true,
+      data: clinic
+    });
+
+  } catch (error) {
+    console.error('❌ Error fetching clinic by slug:', error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error"
+    });
+  }
+});
+
 app.get("/clinic/:id", authenticateJWT, async (req, res) => {
   try {
     const { id } = req.params;
