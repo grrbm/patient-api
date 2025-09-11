@@ -4,6 +4,7 @@ import helmet from "helmet";
 import cors from "cors";
 import { initializeDatabase } from "./config/database";
 import User from "./models/User";
+import Clinic from "./models/Clinic";
 import { createJWTToken, authenticateJWT, getCurrentUser } from "./config/jwt";
 
 // Aptible SSL workaround - disable SSL certificate validation in production
@@ -57,13 +58,21 @@ app.get("/healthz", (_req, res) => res.status(200).send("ok"));
 // Auth routes
 app.post("/auth/signup", async (req, res) => {
   try {
-    const { firstName, lastName, email, password, role, dateOfBirth, phoneNumber } = req.body;
+    const { firstName, lastName, email, password, role, dateOfBirth, phoneNumber, clinicName } = req.body;
 
     // Basic validation
     if (!firstName || !lastName || !email || !password) {
       return res.status(400).json({
         success: false,
         message: "Missing required fields"
+      });
+    }
+
+    // Validate clinic name for healthcare providers
+    if (role === 'provider' && !clinicName?.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "Clinic name is required for healthcare providers"
       });
     }
 
@@ -79,8 +88,31 @@ app.post("/auth/signup", async (req, res) => {
     }
     console.log('✅ No existing user found, proceeding with registration');
 
+    // Create clinic first if user is a healthcare provider
+    let clinic = null;
+    let clinicId = null;
+    
+    if (role === 'provider' && clinicName) {
+      console.log('🏥 Creating clinic with name:', clinicName);
+      
+      // Generate a URL-friendly slug from clinic name
+      const slug = clinicName.toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-|-$/g, '');
+      
+      clinic = await Clinic.create({
+        name: clinicName.trim(),
+        slug: `${slug}-${Date.now()}`, // Add timestamp to ensure uniqueness
+        logo: '', // Default empty logo, can be updated later
+      });
+      
+      clinicId = clinic.id;
+      console.log('✅ Clinic created successfully with ID:', clinic.id);
+      console.log('🏥 Created clinic details:', { id: clinic.id, name: clinic.name, slug: clinic.slug });
+    }
+
     // Create new user in database
-    console.log('🚀 Creating new user with data:', { firstName, lastName, email, role: role === 'provider' ? 'doctor' : 'patient', dob: dateOfBirth, phoneNumber });
+    console.log('🚀 Creating new user with data:', { firstName, lastName, email, role: role === 'provider' ? 'doctor' : 'patient', dob: dateOfBirth, phoneNumber, clinicId });
     const user = await User.createUser({
       firstName,
       lastName,
@@ -90,6 +122,13 @@ app.post("/auth/signup", async (req, res) => {
       dob: dateOfBirth,
       phoneNumber,
     });
+
+    // Associate user with clinic if clinic was created
+    if (clinicId) {
+      user.clinicId = clinicId;
+      await user.save();
+      console.log('🔗 User associated with clinic ID:', clinicId);
+    }
 
     console.log('✅ User created successfully with ID:', user.id);
     console.log('👤 Created user details:', user.toSafeJSON());
