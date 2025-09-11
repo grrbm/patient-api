@@ -1,6 +1,7 @@
-import { Table, Column, DataType } from 'sequelize-typescript';
+import { Table, Column, DataType, ForeignKey, BelongsTo } from 'sequelize-typescript';
 import bcrypt from 'bcrypt';
 import Entity from './Entity';
+import Clinic from './Clinic';
 
 @Table({
   freezeTableName: true,
@@ -107,6 +108,16 @@ export default class User extends Entity {
     allowNull: true,
   })
   declare emergencyContact?: string;
+
+  @ForeignKey(() => Clinic)
+  @Column({
+    type: DataType.UUID,
+    allowNull: true,
+  })
+  declare clinicId?: string;
+
+  @BelongsTo(() => Clinic)
+  declare clinic?: Clinic;
 
   // Instance methods
   public async validatePassword(password: string): Promise<boolean> {
