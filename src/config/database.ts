@@ -1,5 +1,12 @@
-import { Sequelize } from 'sequelize';
+import { Sequelize } from 'sequelize-typescript';
 import dotenv from 'dotenv';
+import User from '../models/User';
+import Entity from '../models/Entity';
+import Product from '../models/Product';
+import Prescription from '../models/Prescription';
+import Treatment from '../models/Treatment';
+import PrescriptionProducts from '../models/PrescriptionProducts';
+import TreatmentProducts from '../models/TreatmentProducts';
 
 // Load environment variables from .env.local
 dotenv.config({ path: '.env.local' });
@@ -40,12 +47,21 @@ const sequelizeConfig = {
   },
 };
 
-export const sequelize = new Sequelize(databaseUrl, sequelizeConfig);
+export const sequelize = new Sequelize(databaseUrl, {
+  ...sequelizeConfig,
+  models: [User, Entity, Product, Prescription, Treatment, PrescriptionProducts, TreatmentProducts],
+});
 
 export async function initializeDatabase() {
   try {
     await sequelize.authenticate();
     console.log('✅ Database connection established successfully');
+
+    console.log("Syncing...")
+    // Sync all models to database (force: true will drop and recreate tables)
+    await sequelize.sync({ alter: true });
+    console.log('✅ Database tables synchronized successfully');
+
     return true;
   } catch (error) {
     console.error('❌ Unable to connect to the database:', error);

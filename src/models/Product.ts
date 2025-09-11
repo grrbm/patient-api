@@ -1,5 +1,9 @@
-import { Table, Column, DataType } from 'sequelize-typescript';
+import { Table, Column, DataType, BelongsToMany, HasMany } from 'sequelize-typescript';
 import Entity from './Entity';
+import Prescription from './Prescription';
+import PrescriptionProducts from './PrescriptionProducts';
+import Treatment from './Treatment';
+import TreatmentProducts from './TreatmentProducts';
 
 @Table({
     freezeTableName: true,
@@ -40,4 +44,16 @@ export default class Product extends Entity {
         allowNull: false,
     })
     declare imageUrl: string;
+
+    @BelongsToMany(() => Prescription, () => PrescriptionProducts)
+    declare prescriptions: Prescription[];
+
+    @HasMany(() => PrescriptionProducts)
+    declare prescriptionProducts: PrescriptionProducts[];
+
+    @BelongsToMany(() => Treatment, () => TreatmentProducts)
+    declare treatments: Treatment[];
+
+    @HasMany(() => TreatmentProducts)
+    declare treatmentProducts: TreatmentProducts[];
 }

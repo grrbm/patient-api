@@ -27,7 +27,7 @@ export default class TreatmentProducts extends Entity {
 
     @ForeignKey(() => Product)
     @Column({
-        type: DataType.STRING,
+        type: DataType.UUID,
         allowNull: false,
     })
     declare productId: string;
@@ -37,7 +37,7 @@ export default class TreatmentProducts extends Entity {
 
     @ForeignKey(() => Treatment)
     @Column({
-        type: DataType.STRING,
+        type: DataType.UUID,
         allowNull: false,
     })
     declare treatmentId: string;

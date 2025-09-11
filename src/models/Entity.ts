@@ -11,7 +11,8 @@ import {
 })
 export default class Entity extends Model {
     @Column({
-        type: DataType.STRING,
+        type: DataType.UUID,
+        defaultValue: DataType.UUIDV4,
         primaryKey: true,
         allowNull: false,
     })

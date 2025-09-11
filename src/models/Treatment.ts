@@ -1,7 +1,8 @@
-import { Table, Column, DataType, HasMany, ForeignKey, BelongsTo } from 'sequelize-typescript';
+import { Table, Column, DataType, HasMany, ForeignKey, BelongsTo, BelongsToMany } from 'sequelize-typescript';
 import Entity from './Entity';
-import Prescription from './Prescription';
-import User1 from './User';
+import User from './User';
+import Product from './Product';
+import TreatmentProducts from './TreatmentProducts';
 
 @Table({
     freezeTableName: true,
@@ -13,28 +14,21 @@ export default class Treatment extends Entity {
     })
     declare name: string;
 
-    @ForeignKey(() => User1)
+    @ForeignKey(() => User)
     @Column({
-        type: DataType.STRING,
+        type: DataType.UUID,
         allowNull: false,
     })
     declare userId: string;
     
-    @BelongsTo(() => User1)
-    declare user: User1;
+    @BelongsTo(() => User)
+    declare user: User;
 
-    @ForeignKey(() => Prescription)
-    @Column({
-        type: DataType.STRING,
-        allowNull: false,
-    })
-    declare prescriptionId: string;
+    @BelongsToMany(() => Product, () => TreatmentProducts)
+    declare products: Product[];
 
-    @BelongsTo(() => Prescription)
-    declare prescription: Prescription;
-
-    @HasMany(() => Prescription)
-    declare prescriptions: Prescription[];
+    @HasMany(() => TreatmentProducts)
+    declare treatmentProducts: TreatmentProducts[];
 
     
 }

@@ -1,52 +1,112 @@
-import { DataTypes, Model, Optional } from 'sequelize';
-import { sequelize } from '../config/database';
+import { Table, Column, DataType } from 'sequelize-typescript';
 import bcrypt from 'bcrypt';
 import Entity from './Entity';
-import { Table } from 'sequelize-typescript';
 
-// User attributes interface
-export interface UserAttributes {
-  id: string;
-  firstName: string;
-  lastName: string;
-  email: string;
-  passwordHash: string;
-  dob?: string;
-  phoneNumber?: string;
-  address?: string;
-  city?: string;
-  state?: string;
-  zipCode?: string;
-  role: 'patient' | 'doctor' | 'admin';
-  lastLoginAt?: Date;
-  consentGivenAt?: Date;
-  emergencyContact?: string;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-// Optional fields for creation (auto-generated)
-interface UserCreationAttributes extends Optional<UserAttributes, 'id' | 'createdAt' | 'updatedAt'> {}
-
-// User model class with HIPAA-compliant methods
-export class User extends Model<UserAttributes, UserCreationAttributes> implements UserAttributes {
-  declare id: string;
+@Table({
+  freezeTableName: true,
+  tableName: 'users',
+})
+export default class User extends Entity {
+  @Column({
+    type: DataType.STRING,
+    allowNull: false,
+    validate: {
+      notEmpty: true,
+      len: [1, 100],
+    },
+  })
   declare firstName: string;
+
+  @Column({
+    type: DataType.STRING,
+    allowNull: false,
+    validate: {
+      notEmpty: true,
+      len: [1, 100],
+    },
+  })
   declare lastName: string;
+
+  @Column({
+    type: DataType.STRING,
+    allowNull: false,
+    unique: true,
+    validate: {
+      isEmail: true,
+      len: [1, 255],
+    },
+  })
   declare email: string;
+
+  @Column({
+    type: DataType.STRING,
+    allowNull: false,
+  })
   declare passwordHash: string;
+
+  @Column({
+    type: DataType.DATEONLY,
+    allowNull: true,
+  })
   declare dob?: string;
+
+  @Column({
+    type: DataType.STRING,
+    allowNull: true,
+    validate: {
+      len: [0, 20],
+    },
+  })
   declare phoneNumber?: string;
+
+  @Column({
+    type: DataType.TEXT,
+    allowNull: true,
+  })
   declare address?: string;
+
+  @Column({
+    type: DataType.STRING(100),
+    allowNull: true,
+  })
   declare city?: string;
+
+  @Column({
+    type: DataType.STRING(50),
+    allowNull: true,
+  })
   declare state?: string;
+
+  @Column({
+    type: DataType.STRING(20),
+    allowNull: true,
+  })
   declare zipCode?: string;
+
+  @Column({
+    type: DataType.ENUM('patient', 'doctor', 'admin'),
+    allowNull: false,
+    defaultValue: 'patient',
+  })
   declare role: 'patient' | 'doctor' | 'admin';
+
+  @Column({
+    type: DataType.DATE,
+    allowNull: true,
+  })
   declare lastLoginAt?: Date;
+
+  @Column({
+    type: DataType.DATE,
+    allowNull: true,
+  })
   declare consentGivenAt?: Date;
+
+  @Column({
+    type: DataType.STRING,
+    allowNull: true,
+  })
   declare emergencyContact?: string;
-  declare createdAt: Date;
-  declare updatedAt: Date;
 
   // Instance methods
   public async validatePassword(password: string): Promise<boolean> {
@@ -117,111 +177,3 @@ export class User extends Model<UserAttributes, UserCreationAttributes> implemen
     });
   }
 }
-
-//This is the class that will be used to create the user table
-//This file should be refactored to use the sequelize-typescript library
-//So it can be more readable and maintainable
-@Table({
-  freezeTableName: true,
-})
-export default class User1 extends Entity {
-}
-
-// Initialize the model
-User.init(
-  {
-    id: {
-      type: DataTypes.UUID,
-      defaultValue: DataTypes.UUIDV4,
-      primaryKey: true,
-      allowNull: false,
-    },
-    firstName: {
-      type: DataTypes.STRING,
-      allowNull: false,
-      validate: {
-        notEmpty: true,
-        len: [1, 100],
-      },
-    },
-    lastName: {
-      type: DataTypes.STRING,
-      allowNull: false,
-      validate: {
-        notEmpty: true,
-        len: [1, 100],
-      },
-    },
-    email: {
-      type: DataTypes.STRING,
-      allowNull: false,
-      unique: true,
-      validate: {
-        isEmail: true,
-        len: [1, 255],
-      },
-    },
-    passwordHash: {
-      type: DataTypes.STRING,
-      allowNull: false,
-    },
-    dob: {
-      type: DataTypes.DATEONLY,
-      allowNull: true,
-    },
-    phoneNumber: {
-      type: DataTypes.STRING,
-      allowNull: true,
-      validate: {
-        len: [0, 20],
-      },
-    },
-    address: {
-      type: DataTypes.TEXT,
-      allowNull: true,
-    },
-    city: {
-      type: DataTypes.STRING(100),
-      allowNull: true,
-    },
-    state: {
-      type: DataTypes.STRING(50),
-      allowNull: true,
-    },
-    zipCode: {
-      type: DataTypes.STRING(20),
-      allowNull: true,
-    },
-    role: {
-      type: DataTypes.ENUM('patient', 'doctor', 'admin'),
-      allowNull: false,
-      defaultValue: 'patient',
-    },
-    lastLoginAt: {
-      type: DataTypes.DATE,
-      allowNull: true,
-    },
-    consentGivenAt: {
-      type: DataTypes.DATE,
-      allowNull: true,
-    },
-    emergencyContact: {
-      type: DataTypes.STRING,
-      allowNull: true,
-    },
-    createdAt: {
-      allowNull: false,
-      type: DataTypes.DATE,
-    },
-    updatedAt: {
-      allowNull: false,
-      type: DataTypes.DATE,
-    },
-  },
-  {
-    sequelize,
-    modelName: 'User',
-    tableName: 'users',
-    timestamps: true,
-  }
-);

@@ -3,7 +3,7 @@ import express from "express";
 import helmet from "helmet";
 import cors from "cors";
 import { initializeDatabase } from "./config/database";
-import { User } from "./models/User";
+import User from "./models/User";
 import { createJWTToken, authenticateJWT, getCurrentUser } from "./config/jwt";
 
 // Aptible SSL workaround - disable SSL certificate validation in production
@@ -68,15 +68,19 @@ app.post("/auth/signup", async (req, res) => {
     }
 
     // Check if user already exists
+    console.log('🔍 Checking if user exists with email:', email);
     const existingUser = await User.findByEmail(email);
     if (existingUser) {
+      console.log('❌ User already exists with email:', email);
       return res.status(409).json({
         success: false,
         message: "User with this email already exists"
       });
     }
+    console.log('✅ No existing user found, proceeding with registration');
 
     // Create new user in database
+    console.log('🚀 Creating new user with data:', { firstName, lastName, email, role: role === 'provider' ? 'doctor' : 'patient', dob: dateOfBirth, phoneNumber });
     const user = await User.createUser({
       firstName,
       lastName,
@@ -87,7 +91,12 @@ app.post("/auth/signup", async (req, res) => {
       phoneNumber,
     });
 
-    console.log('User successfully registered with email:', user.email); // Safe to log email for development
+    console.log('✅ User created successfully with ID:', user.id);
+    console.log('👤 Created user details:', user.toSafeJSON());
+
+    // Pull user from database to confirm it was saved
+    const savedUser = await User.findByPk(user.id);
+    console.log('🔄 User pulled from database:', savedUser ? savedUser.toSafeJSON() : 'NOT FOUND');
 
     res.status(201).json({
       success: true,

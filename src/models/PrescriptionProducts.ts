@@ -7,8 +7,9 @@ import Prescription from './Prescription';
     freezeTableName: true,
 })
 export default class PrescriptionProducts extends Entity {
+    @ForeignKey(() => Prescription)
     @Column({
-        type: DataType.STRING,
+        type: DataType.UUID,
         allowNull: false,
     })
     declare prescriptionId: string;
@@ -21,7 +22,7 @@ export default class PrescriptionProducts extends Entity {
 
     @ForeignKey(() => Product)
     @Column({
-        type: DataType.STRING,
+        type: DataType.UUID,
         allowNull: false,
     })
     declare productId: string;

@@ -1,7 +1,8 @@
-import { Table, Column, DataType, ForeignKey, HasMany, BelongsTo } from 'sequelize-typescript';
+import { Table, Column, DataType, ForeignKey, HasMany, BelongsTo, BelongsToMany } from 'sequelize-typescript';
 import Entity from './Entity';
-import User1 from './User';
+import User from './User';
 import Product from './Product';
+import PrescriptionProducts from './PrescriptionProducts';
 
 @Table({
     freezeTableName: true,
@@ -25,36 +26,29 @@ export default class Prescription extends Entity {
     })
     declare writtenAt: Date;
 
-    @ForeignKey(() => User1)
+    @ForeignKey(() => User)
     @Column({
-        type: DataType.STRING,
+        type: DataType.UUID,
         allowNull: false,
     })
     declare patientId: string;
 
-    @BelongsTo(() => User1)
-    declare patient: User1;
+    @BelongsTo(() => User)
+    declare patient: User;
 
-    @ForeignKey(() => User1)
+    @ForeignKey(() => User)
     @Column({
-        type: DataType.STRING,
+        type: DataType.UUID,
         allowNull: false,
     })
     declare doctorId: string;
 
-    @BelongsTo(() => User1)
-    declare doctor: User1;
+    @BelongsTo(() => User)
+    declare doctor: User;
 
-    @ForeignKey(() => Product)
-    @Column({
-        type: DataType.STRING,
-        allowNull: false,
-    })
-    declare productId: string;
-
-    @BelongsTo(() => Product)
-    declare product: Product;
-
-    @HasMany(() => Product)
+    @BelongsToMany(() => Product, () => PrescriptionProducts)
     declare products: Product[];
+
+    @HasMany(() => PrescriptionProducts)
+    declare prescriptionProducts: PrescriptionProducts[];
 }
