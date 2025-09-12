@@ -441,8 +441,8 @@ app.get("/clinic/:id", authenticateJWT, async (req, res) => {
       });
     }
 
-    // Only allow doctors to access clinic data, and only their own clinic
-    if (user.role !== 'doctor' || user.clinicId !== id) {
+    // Only allow users to access their own clinic data (doctors and patients)
+    if (user.clinicId !== id) {
       return res.status(403).json({
         success: false,
         message: "Access denied"
