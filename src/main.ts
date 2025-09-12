@@ -659,6 +659,110 @@ app.post("/clinic/:id/upload-logo", authenticateJWT, upload.single('logo'), asyn
   }
 });
 
+// Treatment logo upload endpoint
+app.post("/treatment/:id/upload-logo", authenticateJWT, upload.single('logo'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const currentUser = getCurrentUser(req);
+
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "Not authenticated"
+      });
+    }
+
+    // Fetch full user data from database to get clinicId
+    const user = await User.findByPk(currentUser.id);
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: "User not found"
+      });
+    }
+
+    // Only allow doctors to upload treatment logos for their own clinic's treatments
+    if (user.role !== 'doctor') {
+      return res.status(403).json({
+        success: false,
+        message: "Only doctors can upload treatment logos"
+      });
+    }
+
+    // Check if file was uploaded
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: "No file uploaded"
+      });
+    }
+
+    // Validate file size (additional check)
+    if (!isValidFileSize(req.file.size)) {
+      return res.status(400).json({
+        success: false,
+        message: "File too large. Maximum size is 5MB."
+      });
+    }
+
+    const treatment = await Treatment.findByPk(id);
+    if (!treatment) {
+      return res.status(404).json({
+        success: false,
+        message: "Treatment not found"
+      });
+    }
+
+    // Verify treatment belongs to user's clinic
+    if (treatment.clinicId !== user.clinicId) {
+      return res.status(403).json({
+        success: false,
+        message: "Access denied"
+      });
+    }
+
+    // Delete old logo from S3 if it exists
+    if (treatment.treatmentLogo && treatment.treatmentLogo.trim() !== '') {
+      try {
+        await deleteFromS3(treatment.treatmentLogo);
+        console.log('🗑️ Old treatment logo deleted from S3');
+      } catch (error) {
+        console.error('Warning: Failed to delete old treatment logo from S3:', error);
+        // Don't fail the entire request if deletion fails
+      }
+    }
+
+    // Upload new logo to S3
+    const logoUrl = await uploadToS3(
+      req.file.buffer,
+      req.file.originalname,
+      req.file.mimetype
+    );
+
+    // Update treatment with new logo URL
+    await treatment.update({ treatmentLogo: logoUrl });
+
+    console.log('💊 Logo uploaded for treatment:', { id: treatment.id, logoUrl });
+
+    res.status(200).json({
+      success: true,
+      message: "Treatment logo uploaded successfully",
+      data: {
+        id: treatment.id,
+        name: treatment.name,
+        treatmentLogo: treatment.treatmentLogo,
+      }
+    });
+
+  } catch (error) {
+    console.error('Error uploading treatment logo:', error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to upload treatment logo"
+    });
+  }
+});
+
 // Treatments routes
 // Public endpoint to get treatments by clinic slug
 app.get("/treatments/by-clinic-slug/:slug", async (req, res) => {
@@ -672,7 +776,7 @@ app.get("/treatments/by-clinic-slug/:slug", async (req, res) => {
         {
           model: Treatment,
           as: 'treatments',
-          attributes: ['id', 'name', 'createdAt', 'updatedAt']
+          attributes: ['id', 'name', 'treatmentLogo', 'createdAt', 'updatedAt']
         }
       ]
     });
@@ -696,6 +800,208 @@ app.get("/treatments/by-clinic-slug/:slug", async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Internal server error"
+    });
+  }
+});
+
+// Protected endpoint to get treatments by clinic ID (for authenticated users)
+app.get("/treatments/by-clinic-id/:clinicId", authenticateJWT, async (req, res) => {
+  try {
+    const { clinicId } = req.params;
+    const currentUser = getCurrentUser(req);
+
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "Not authenticated"
+      });
+    }
+
+    // Fetch full user data from database to get clinicId
+    const user = await User.findByPk(currentUser.id);
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: "User not found"
+      });
+    }
+
+    // Only allow users to access their own clinic's treatments
+    // For doctors: they can access their clinic's treatments
+    // For patients: they can access their clinic's treatments
+    if (user.clinicId !== clinicId) {
+      return res.status(403).json({
+        success: false,
+        message: "Access denied"
+      });
+    }
+
+    // Find treatments for the clinic
+    const treatments = await Treatment.findAll({
+      where: { clinicId },
+      attributes: ['id', 'name', 'treatmentLogo', 'createdAt', 'updatedAt']
+    });
+
+    console.log(`✅ Found ${treatments?.length || 0} treatments for clinic ID "${clinicId}"`);
+
+    res.json({
+      success: true,
+      data: treatments || []
+    });
+
+  } catch (error) {
+    console.error('❌ Error fetching treatments by clinic ID:', error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error"
+    });
+  }
+});
+
+// Create new treatment
+app.post("/treatments", authenticateJWT, async (req, res) => {
+  try {
+    const { name } = req.body;
+    const currentUser = getCurrentUser(req);
+
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "Not authenticated"
+      });
+    }
+
+    // Fetch full user data from database to get clinicId
+    const user = await User.findByPk(currentUser.id);
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: "User not found"
+      });
+    }
+
+    // Only allow doctors to create treatments
+    if (user.role !== 'doctor' || !user.clinicId) {
+      return res.status(403).json({
+        success: false,
+        message: "Only doctors with a clinic can create treatments"
+      });
+    }
+
+    // Validate input
+    if (!name || !name.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "Treatment name is required"
+      });
+    }
+
+    // Create treatment
+    const treatment = await Treatment.create({
+      name: name.trim(),
+      userId: user.id,
+      clinicId: user.clinicId,
+      treatmentLogo: ''
+    });
+
+    console.log('💊 Treatment created:', { id: treatment.id, name: treatment.name });
+
+    res.status(201).json({
+      success: true,
+      message: "Treatment created successfully",
+      data: {
+        id: treatment.id,
+        name: treatment.name,
+        treatmentLogo: treatment.treatmentLogo,
+      }
+    });
+
+  } catch (error) {
+    console.error('Error creating treatment:', error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to create treatment"
+    });
+  }
+});
+
+// Update treatment
+app.put("/treatments/:id", authenticateJWT, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name } = req.body;
+    const currentUser = getCurrentUser(req);
+
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "Not authenticated"
+      });
+    }
+
+    // Fetch full user data from database to get clinicId
+    const user = await User.findByPk(currentUser.id);
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: "User not found"
+      });
+    }
+
+    // Only allow doctors to update treatments
+    if (user.role !== 'doctor') {
+      return res.status(403).json({
+        success: false,
+        message: "Only doctors can update treatments"
+      });
+    }
+
+    // Validate input
+    if (!name || !name.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "Treatment name is required"
+      });
+    }
+
+    const treatment = await Treatment.findByPk(id);
+    if (!treatment) {
+      return res.status(404).json({
+        success: false,
+        message: "Treatment not found"
+      });
+    }
+
+    // Verify treatment belongs to user's clinic
+    if (treatment.clinicId !== user.clinicId) {
+      return res.status(403).json({
+        success: false,
+        message: "Access denied"
+      });
+    }
+
+    // Update treatment
+    await treatment.update({
+      name: name.trim()
+    });
+
+    console.log('💊 Treatment updated:', { id: treatment.id, name: treatment.name });
+
+    res.status(200).json({
+      success: true,
+      message: "Treatment updated successfully",
+      data: {
+        id: treatment.id,
+        name: treatment.name,
+        treatmentLogo: treatment.treatmentLogo,
+      }
+    });
+
+  } catch (error) {
+    console.error('Error updating treatment:', error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to update treatment"
     });
   }
 });

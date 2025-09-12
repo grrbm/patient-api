@@ -15,6 +15,12 @@ export default class Treatment extends Entity {
     })
     declare name: string;
 
+    @Column({
+        type: DataType.TEXT,
+        allowNull: true,
+    })
+    declare treatmentLogo: string;
+
     @ForeignKey(() => User)
     @Column({
         type: DataType.UUID,
