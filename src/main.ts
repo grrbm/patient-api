@@ -6,6 +6,7 @@ import multer from "multer";
 import { initializeDatabase } from "./config/database";
 import User from "./models/User";
 import Clinic from "./models/Clinic";
+import Treatment from "./models/Treatment";
 import { createJWTToken, authenticateJWT, getCurrentUser } from "./config/jwt";
 import { uploadToS3, deleteFromS3, isValidImageFile, isValidFileSize } from "./config/s3";
 
@@ -652,6 +653,47 @@ app.post("/clinic/:id/upload-logo", authenticateJWT, upload.single('logo'), asyn
     res.status(500).json({
       success: false,
       message: "Failed to upload logo"
+    });
+  }
+});
+
+// Treatments routes
+// Public endpoint to get treatments by clinic slug
+app.get("/treatments/by-clinic-slug/:slug", async (req, res) => {
+  try {
+    const { slug } = req.params;
+
+    // First find the clinic by slug
+    const clinic = await Clinic.findOne({
+      where: { slug },
+      include: [
+        {
+          model: Treatment,
+          as: 'treatments',
+          attributes: ['id', 'name', 'createdAt', 'updatedAt']
+        }
+      ]
+    });
+
+    if (!clinic) {
+      return res.status(404).json({
+        success: false,
+        message: "Clinic not found"
+      });
+    }
+
+    console.log(`✅ Found ${clinic.treatments?.length || 0} treatments for clinic "${slug}"`);
+
+    res.json({
+      success: true,
+      data: clinic.treatments || []
+    });
+
+  } catch (error) {
+    console.error('❌ Error fetching treatments by clinic slug:', error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error"
     });
   }
 });

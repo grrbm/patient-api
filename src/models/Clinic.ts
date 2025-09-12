@@ -1,6 +1,7 @@
 import { Table, Column, DataType, HasMany } from 'sequelize-typescript';
 import Entity from './Entity';
 import User from './User';
+import Treatment from './Treatment';
 
 @Table({
     freezeTableName: true,
@@ -27,4 +28,7 @@ export default class Clinic extends Entity {
 
     @HasMany(() => User)
     declare users: User[];
+
+    @HasMany(() => Treatment)
+    declare treatments: Treatment[];
 }
