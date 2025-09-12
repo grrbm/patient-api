@@ -26,7 +26,7 @@ module.exports = {
 
     // Get a sample user ID (assuming there's at least one user)
     const [users] = await queryInterface.sequelize.query(`
-      SELECT id FROM "User" LIMIT 1
+      SELECT id FROM "users" LIMIT 1
     `);
     
     if (users.length === 0) {
