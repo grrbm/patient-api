@@ -15,19 +15,19 @@ async function generateUniqueSlug(clinicName: string, excludeId?: string): Promi
   const baseSlug = clinicName.toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-|-$/g, '');
-  
+
   // Check if base slug is available
   const whereClause: any = { slug: baseSlug };
   if (excludeId) {
     whereClause.id = { [require('sequelize').Op.ne]: excludeId };
   }
-  
+
   const existingClinic = await Clinic.findOne({ where: whereClause });
-  
+
   if (!existingClinic) {
     return baseSlug;
   }
-  
+
   // If base slug exists, try incremental numbers
   let counter = 1;
   while (true) {
@@ -36,13 +36,13 @@ async function generateUniqueSlug(clinicName: string, excludeId?: string): Promi
     if (excludeId) {
       whereClauseWithNumber.id = { [require('sequelize').Op.ne]: excludeId };
     }
-    
+
     const existingWithNumber = await Clinic.findOne({ where: whereClauseWithNumber });
-    
+
     if (!existingWithNumber) {
       return slugWithNumber;
     }
-    
+
     counter++;
   }
 }
@@ -82,6 +82,7 @@ app.use(cors({
         'https://app-95883.on-aptible.com', // Current frontend URL
         'http://3.140.178.30', // Add your frontend IP
         'https://unboundedhealth.xyz', // Add unboundedhealth.xyz
+        'https://www.unboundedhealth.xyz'
       ]
       : ['http://localhost:3000', 'http://3.140.178.30', 'https://unboundedhealth.xyz']; // Allow local frontend, your IP, and unboundedhealth.xyz during development
 
@@ -149,20 +150,20 @@ app.post("/auth/signup", async (req, res) => {
     // Handle clinic association
     let clinic = null;
     let finalClinicId = clinicId; // Use provided clinicId from request body
-    
+
     // Create clinic if user is a healthcare provider and no clinicId provided
     if (role === 'provider' && clinicName && !clinicId) {
       console.log('🏥 Creating clinic with name:', clinicName);
-      
+
       // Generate unique slug
       const slug = await generateUniqueSlug(clinicName.trim());
-      
+
       clinic = await Clinic.create({
         name: clinicName.trim(),
         slug: slug,
         logo: '', // Default empty logo, can be updated later
       });
-      
+
       finalClinicId = clinic.id;
       console.log('✅ Clinic created successfully with ID:', clinic.id);
       console.log('🏥 Created clinic details:', { id: clinic.id, name: clinic.name, slug: clinic.slug });
