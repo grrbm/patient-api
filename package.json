@@ -27,7 +27,8 @@
     "reflect-metadata": "^0.2.2",
     "sequelize": "^6.37.7",
     "sequelize-cli": "^6.6.3",
-    "sequelize-typescript": "^2.1.6"
+    "sequelize-typescript": "^2.1.6",
+    "stripe": "^17.5.0"
   },
   "devDependencies": {
     "@types/bcrypt": "^6.0.0",

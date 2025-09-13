@@ -14,6 +14,7 @@ import Question from "./models/Question";
 import QuestionOption from "./models/QuestionOption";
 import { createJWTToken, authenticateJWT, getCurrentUser } from "./config/jwt";
 import { uploadToS3, deleteFromS3, isValidImageFile, isValidFileSize } from "./config/s3";
+import Stripe from "stripe";
 
 // Helper function to generate unique clinic slug
 async function generateUniqueSlug(clinicName: string, excludeId?: string): Promise<string> {
@@ -60,6 +61,11 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 const app = express();
+
+// Initialize Stripe
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+  apiVersion: '2025-02-24.acacia',
+});
 
 // Configure multer for file uploads (store in memory)
 const upload = multer({
@@ -1047,6 +1053,123 @@ app.get("/treatments/:id", async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to fetch treatment"
+    });
+  }
+});
+
+// Payment routes
+// Create payment intent
+app.post("/create-payment-intent", authenticateJWT, async (req, res) => {
+  try {
+    const { amount, currency = 'usd', treatmentId, selectedProducts } = req.body;
+    const currentUser = getCurrentUser(req);
+
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "Not authenticated"
+      });
+    }
+
+    // Validate amount
+    if (!amount || amount <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid amount"
+      });
+    }
+
+    // Create payment intent with Stripe
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: Math.round(amount * 100), // Convert to cents
+      currency,
+      metadata: {
+        userId: currentUser.id,
+        treatmentId: treatmentId || '',
+        selectedProducts: JSON.stringify(selectedProducts || {}),
+        // HIPAA compliance: Don't include specific medical details
+        orderType: 'treatment_refill'
+      },
+      description: 'Treatment refill order',
+    });
+
+    console.log('💳 Payment intent created:', { 
+      id: paymentIntent.id, 
+      amount: paymentIntent.amount,
+      userId: currentUser.id 
+    });
+
+    res.status(200).json({
+      success: true,
+      data: {
+        clientSecret: paymentIntent.client_secret,
+        paymentIntentId: paymentIntent.id
+      }
+    });
+
+  } catch (error) {
+    console.error('Error creating payment intent:', error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to create payment intent"
+    });
+  }
+});
+
+// Confirm payment completion
+app.post("/confirm-payment", authenticateJWT, async (req, res) => {
+  try {
+    const { paymentIntentId } = req.body;
+    const currentUser = getCurrentUser(req);
+
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "Not authenticated"
+      });
+    }
+
+    // Retrieve payment intent from Stripe
+    const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+
+    if (paymentIntent.status === 'succeeded') {
+      // Payment was successful
+      // Here you would typically:
+      // 1. Update order status in database
+      // 2. Send confirmation email
+      // 3. Update inventory
+      // 4. Create prescription records, etc.
+      
+      console.log('💳 Payment confirmed:', { 
+        id: paymentIntent.id, 
+        amount: paymentIntent.amount,
+        userId: currentUser.id 
+      });
+
+      res.status(200).json({
+        success: true,
+        message: "Payment confirmed successfully",
+        data: {
+          paymentIntentId: paymentIntent.id,
+          amount: paymentIntent.amount / 100, // Convert back from cents
+          status: paymentIntent.status
+        }
+      });
+    } else {
+      res.status(400).json({
+        success: false,
+        message: "Payment was not successful",
+        data: {
+          status: paymentIntent.status
+        }
+      });
+    }
+
+  } catch (error) {
+    console.error('Error confirming payment:', error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to confirm payment"
     });
   }
 });
