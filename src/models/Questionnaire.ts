@@ -19,6 +19,13 @@ export default class Questionnaire extends Entity {
     })
     declare description: string;
 
+    @Column({
+        type: DataType.INTEGER,
+        allowNull: false,
+        defaultValue: -1,
+    })
+    declare checkoutStepPosition: number;
+
     @ForeignKey(() => Treatment)
     @Column({
         type: DataType.UUID,

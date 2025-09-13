@@ -20,6 +20,7 @@ module.exports = {
       title: 'NAD+ Intake Questionnaire',
       description: 'Complete intake questionnaire for NAD+ treatment',
       treatmentId: nadTreatmentId,
+      checkoutStepPosition: -1, // Checkout steps at the end
       createdAt: new Date(),
       updatedAt: new Date()
     }]);

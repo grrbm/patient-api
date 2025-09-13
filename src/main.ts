@@ -7,6 +7,7 @@ import { initializeDatabase } from "./config/database";
 import User from "./models/User";
 import Clinic from "./models/Clinic";
 import Treatment from "./models/Treatment";
+import Product from "./models/Product";
 import Questionnaire from "./models/Questionnaire";
 import QuestionnaireStep from "./models/QuestionnaireStep";
 import Question from "./models/Question";
@@ -1006,6 +1007,46 @@ app.put("/treatments/:id", authenticateJWT, async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to update treatment"
+    });
+  }
+});
+
+// Get single treatment with products
+app.get("/treatments/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const treatment = await Treatment.findByPk(id, {
+      include: [
+        {
+          model: Product,
+          as: 'products',
+          through: {
+            attributes: ['dosage', 'numberOfDoses', 'nextDose']
+          }
+        }
+      ]
+    });
+
+    if (!treatment) {
+      return res.status(404).json({
+        success: false,
+        message: "Treatment not found"
+      });
+    }
+
+    console.log('💊 Treatment fetched:', { id: treatment.id, name: treatment.name, productsCount: treatment.products?.length || 0 });
+
+    res.status(200).json({
+      success: true,
+      data: treatment
+    });
+
+  } catch (error) {
+    console.error('Error fetching treatment:', error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch treatment"
     });
   }
 });
