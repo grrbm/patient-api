@@ -63,6 +63,13 @@ if (process.env.NODE_ENV === 'production') {
 const app = express();
 
 // Initialize Stripe
+if (!process.env.STRIPE_SECRET_KEY) {
+  console.error('❌ STRIPE_SECRET_KEY environment variable is not set');
+  console.log('Available env variables:', Object.keys(process.env).filter(key => key.includes('STRIPE')));
+} else {
+  console.log('✅ Stripe secret key found, initializing...');
+}
+
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2025-02-24.acacia',
 });
@@ -1109,9 +1116,23 @@ app.post("/create-payment-intent", authenticateJWT, async (req, res) => {
 
   } catch (error) {
     console.error('Error creating payment intent:', error);
+    
+    // Log specific error details for debugging
+    if (error instanceof Error) {
+      console.error('Error message:', error.message);
+      console.error('Error stack:', error.stack);
+    }
+    
+    // Check if it's a Stripe error
+    if (error && typeof error === 'object' && 'type' in error) {
+      console.error('Stripe error type:', (error as any).type);
+      console.error('Stripe error code:', (error as any).code);
+    }
+    
     res.status(500).json({
       success: false,
-      message: "Failed to create payment intent"
+      message: "Failed to create payment intent",
+      error: process.env.NODE_ENV === 'development' ? (error instanceof Error ? error.message : String(error)) : undefined
     });
   }
 });
