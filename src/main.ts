@@ -7,6 +7,10 @@ import { initializeDatabase } from "./config/database";
 import User from "./models/User";
 import Clinic from "./models/Clinic";
 import Treatment from "./models/Treatment";
+import Questionnaire from "./models/Questionnaire";
+import QuestionnaireStep from "./models/QuestionnaireStep";
+import Question from "./models/Question";
+import QuestionOption from "./models/QuestionOption";
 import { createJWTToken, authenticateJWT, getCurrentUser } from "./config/jwt";
 import { uploadToS3, deleteFromS3, isValidImageFile, isValidFileSize } from "./config/s3";
 
@@ -1002,6 +1006,62 @@ app.put("/treatments/:id", authenticateJWT, async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to update treatment"
+    });
+  }
+});
+
+// Questionnaire routes
+// Get questionnaire for a treatment
+app.get("/questionnaires/treatment/:treatmentId", async (req, res) => {
+  try {
+    const { treatmentId } = req.params;
+
+    const questionnaire = await Questionnaire.findOne({
+      where: { treatmentId },
+      include: [
+        {
+          model: QuestionnaireStep,
+          as: 'steps',
+          include: [
+            {
+              model: Question,
+              as: 'questions',
+              include: [
+                {
+                  model: QuestionOption,
+                  as: 'options'
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      order: [
+        [{ model: QuestionnaireStep, as: 'steps' }, 'stepOrder', 'ASC'],
+        [{ model: QuestionnaireStep, as: 'steps' }, { model: Question, as: 'questions' }, 'questionOrder', 'ASC'],
+        [{ model: QuestionnaireStep, as: 'steps' }, { model: Question, as: 'questions' }, { model: QuestionOption, as: 'options' }, 'optionOrder', 'ASC']
+      ]
+    });
+
+    if (!questionnaire) {
+      return res.status(404).json({
+        success: false,
+        message: "Questionnaire not found for this treatment"
+      });
+    }
+
+    console.log(`✅ Found questionnaire for treatment ID "${treatmentId}"`);
+
+    res.json({
+      success: true,
+      data: questionnaire
+    });
+
+  } catch (error) {
+    console.error('❌ Error fetching questionnaire:', error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error"
     });
   }
 });
