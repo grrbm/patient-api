@@ -8,6 +8,10 @@ import Treatment from '../models/Treatment';
 import PrescriptionProducts from '../models/PrescriptionProducts';
 import TreatmentProducts from '../models/TreatmentProducts';
 import Clinic from '../models/Clinic';
+import Questionnaire from '../models/Questionnaire';
+import QuestionnaireStep from '../models/QuestionnaireStep';
+import Question from '../models/Question';
+import QuestionOption from '../models/QuestionOption';
 
 // Load environment variables from .env.local
 dotenv.config({ path: '.env.local' });
@@ -50,7 +54,7 @@ const sequelizeConfig = {
 
 export const sequelize = new Sequelize(databaseUrl, {
   ...sequelizeConfig,
-  models: [User, Entity, Product, Prescription, Treatment, PrescriptionProducts, TreatmentProducts, Clinic],
+  models: [User, Entity, Product, Prescription, Treatment, PrescriptionProducts, TreatmentProducts, Clinic, Questionnaire, QuestionnaireStep, Question, QuestionOption],
 });
 
 export async function initializeDatabase() {
