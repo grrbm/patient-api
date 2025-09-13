@@ -108,8 +108,8 @@ app.use(cors({
     // Check if origin is in allowed list or matches patterns
     const isAllowed = allowedOrigins.includes(origin) ||
       (process.env.NODE_ENV === 'production' && /^https:\/\/app-\d+\.on-aptible\.com$/.test(origin)) ||
-      // Allow clinic subdomains in development (e.g., g-health.localhost:3000)
-      (process.env.NODE_ENV === 'development' && /^http:\/\/[a-zA-Z0-9-]+\.localhost:3000$/.test(origin)) ||
+      // Allow clinic subdomains in development (e.g., g-health.localhost:3000, saboia.xyz.localhost:3000)
+      (process.env.NODE_ENV === 'development' && /^http:\/\/[a-zA-Z0-9.-]+\.localhost:3000$/.test(origin)) ||
       // Allow production clinic domains (e.g., app.limitless.health, app.hims.com)
       (process.env.NODE_ENV === 'production' && /^https:\/\/app\.[a-zA-Z0-9-]+\.[a-zA-Z]{2,}$/.test(origin)) ||
       // Allow all subdomains of unboundedhealth.xyz (legacy support)
