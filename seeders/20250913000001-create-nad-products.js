@@ -78,6 +78,9 @@ module.exports = {
         id: '660e8400-e29b-41d4-a716-446655440001',
         treatmentId: treatment.id,
         productId: '550e8400-e29b-41d4-a716-446655440001',
+        dosage: '500 mg per infusion',
+        numberOfDoses: 8,
+        nextDose: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 1 week from now
         createdAt: new Date(),
         updatedAt: new Date()
       },
@@ -85,6 +88,9 @@ module.exports = {
         id: '660e8400-e29b-41d4-a716-446655440002',
         treatmentId: treatment.id,
         productId: '550e8400-e29b-41d4-a716-446655440002',
+        dosage: '300 mg daily',
+        numberOfDoses: 30,
+        nextDose: new Date(Date.now() + 24 * 60 * 60 * 1000), // 1 day from now
         createdAt: new Date(),
         updatedAt: new Date()
       },
@@ -92,6 +98,9 @@ module.exports = {
         id: '660e8400-e29b-41d4-a716-446655440003',
         treatmentId: treatment.id,
         productId: '550e8400-e29b-41d4-a716-446655440003',
+        dosage: '750 mg NAD+ + B-complex per infusion',
+        numberOfDoses: 6,
+        nextDose: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), // 2 weeks from now
         createdAt: new Date(),
         updatedAt: new Date()
       },
@@ -99,6 +108,9 @@ module.exports = {
         id: '660e8400-e29b-41d4-a716-446655440004',
         treatmentId: treatment.id,
         productId: '550e8400-e29b-41d4-a716-446655440004',
+        dosage: '500 mg NAD+ + 2000 mg Glutathione per infusion',
+        numberOfDoses: 4,
+        nextDose: new Date(Date.now() + 21 * 24 * 60 * 60 * 1000), // 3 weeks from now
         createdAt: new Date(),
         updatedAt: new Date()
       },
@@ -106,6 +118,9 @@ module.exports = {
         id: '660e8400-e29b-41d4-a716-446655440005',
         treatmentId: treatment.id,
         productId: '550e8400-e29b-41d4-a716-446655440005',
+        dosage: '50 mg per spray, 2 sprays daily',
+        numberOfDoses: 60,
+        nextDose: new Date(Date.now() + 24 * 60 * 60 * 1000), // 1 day from now
         createdAt: new Date(),
         updatedAt: new Date()
       }
