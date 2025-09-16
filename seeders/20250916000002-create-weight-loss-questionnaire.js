@@ -20,25 +20,12 @@ module.exports = {
       title: 'Weight Loss Checkout',
       description: 'Select your weight loss plan and complete your order',
       treatmentId: weightLossTreatmentId,
-      checkoutStepPosition: 1, // Checkout step is the first and only step
+      checkoutStepPosition: 0, // Checkout step appears immediately, no other steps
       createdAt: new Date(),
       updatedAt: new Date()
     }]);
 
-    // Create only the checkout step
-    const steps = [
-      {
-        id: require('uuid').v4(),
-        title: 'Choose Your Plan',
-        description: 'Select your weight loss medication plan and complete your order',
-        stepOrder: 1,
-        questionnaireId: questionnaireId,
-        createdAt: new Date(),
-        updatedAt: new Date()
-      }
-    ];
-
-    await queryInterface.bulkInsert('QuestionnaireStep', steps);
+    // No steps needed - checkout will appear immediately
 
     console.log('✅ Weight Loss questionnaire with checkout step created successfully');
   },
