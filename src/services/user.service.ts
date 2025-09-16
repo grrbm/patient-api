@@ -1,6 +1,7 @@
 import User from '../models/User';
 import { getUser, updateUser } from './db/user';
 import PatientService, { CreatePatientRequest, PatientAddress } from './pharmacy/patient';
+import PhysicianService, { CreatePhysicianRequest } from './pharmacy/physician';
 
 interface UserToPatientValidationResult {
     valid: boolean;
@@ -8,11 +9,19 @@ interface UserToPatientValidationResult {
     errorMessage?: string;
 }
 
+interface UserToPhysicianValidationResult {
+    valid: boolean;
+    missingFields: string[];
+    errorMessage?: string;
+}
+
 class UserService {
     private patientService: PatientService;
+    private physicianService: PhysicianService;
 
     constructor() {
         this.patientService = new PatientService();
+        this.physicianService = new PhysicianService();
     }
 
 
@@ -190,7 +199,187 @@ class UserService {
             };
         }
     }
+
+    validateUserForPhysicianCreation(user: User): UserToPhysicianValidationResult {
+        const missingFields: string[] = [];
+
+        // Required string fields for CreatePhysicianRequest
+        if (!user.firstName?.trim()) {
+            missingFields.push('firstName (first_name)');
+        }
+        if (!user.lastName?.trim()) {
+            missingFields.push('lastName (last_name)');
+        }
+        if (!user.email?.trim()) {
+            missingFields.push('email');
+        }
+        if (!user.phoneNumber?.trim()) {
+            missingFields.push('phoneNumber (phone_number)');
+        }
+
+        // Professional fields - these would need to be added to User model
+        // For now, we'll check if they exist in a hypothetical field
+        if (!user.deaNumber?.trim()) {
+            missingFields.push('deaNumber (dea_number)');
+        }
+        if (!user.npiNumber?.trim()) {
+            missingFields.push('npiNumber (npi_number)');
+        }
+
+        // Required address fields for CreatePhysicianRequest
+        if (!user.address?.trim()) {
+            missingFields.push('address (street)');
+        }
+        if (!user.city?.trim()) {
+            missingFields.push('city');
+        }
+        if (!user.state?.trim()) {
+            missingFields.push('state');
+        }
+        if (!user.zipCode?.trim()) {
+            missingFields.push('zipCode (zip)');
+        }
+
+        // Required licenses array
+        if (!user.licenses || !Array.isArray(user.licenses) || user.licenses.length === 0) {
+            missingFields.push('licenses (must be an array with at least one license)');
+        } else {
+            // Validate each license
+            user.licenses.forEach((license, index) => {
+                if (!license.state?.trim()) {
+                    missingFields.push(`licenses[${index}].state`);
+                }
+                if (!license.number?.trim()) {
+                    missingFields.push(`licenses[${index}].number`);
+                }
+                if (!license.type?.trim()) {
+                    missingFields.push(`licenses[${index}].type`);
+                }
+                if (!license.expires_on?.trim()) {
+                    missingFields.push(`licenses[${index}].expires_on`);
+                }
+            });
+        }
+
+        if (missingFields.length > 0) {
+            return {
+                valid: false,
+                missingFields,
+                errorMessage: `Missing required fields for physician creation: ${missingFields.join(', ')}`
+            };
+        }
+
+        return {
+            valid: true,
+            missingFields: []
+        };
+    }
+
+    mapUserToPhysicianRequest(user: User): CreatePhysicianRequest {
+        return {
+            first_name: user.firstName,
+            last_name: user.lastName,
+            phone_number: user.phoneNumber!,
+            email: user.email,
+            dea_number: user.deaNumber!,
+            npi_number: user.npiNumber!,
+            street: user.address!,
+            city: user.city!,
+            state: user.state!,
+            zip: user.zipCode!,
+            licenses: user.licenses!
+        };
+    }
+
+    async syncDoctorFromUser(userId: string) {
+        try {
+            const user = await getUser(userId);
+
+            if (!user) {
+                throw Error("User not found")
+            }
+
+            const validation = this.validateUserForPhysicianCreation(user);
+
+            if (!validation.valid) {
+                return {
+                    success: false,
+                    error: validation.errorMessage,
+                    missingFields: validation.missingFields
+                };
+            }
+
+            const physicianRequest = this.mapUserToPhysicianRequest(user);
+
+            // Check if user already has a pharmacy physician ID
+            if (!user.pharmacyPhysicianId) {
+                // Create new physician
+                const result = await this.physicianService.createPhysician(physicianRequest);
+
+                // If creation successful, save the pharmacy physician ID to user
+                if (result.success && result.data?.id) {
+                    await User.update(
+                        { pharmacyPhysicianId: result.data.id },
+                        { where: { id: userId } }
+                    );
+                }
+
+            } else {
+                // Update existing physician
+                await this.physicianService.updatePhysician(
+                    parseInt(user.pharmacyPhysicianId),
+                    physicianRequest
+                );
+            }
+
+        } catch (error) {
+            console.error('Error syncing physician from user:', error);
+            return {
+                success: false,
+                error: error instanceof Error ? error.message : 'Unknown error occurred'
+            };
+        }
+    }
+
+    async updateUserDoctor(userId: string, updateData: Partial<User>) {
+        try {
+            const user = await getUser(userId);
+
+            if (!user) {
+                return {
+                    success: false,
+                    error: "User not found"
+                };
+            }
+
+            // Validate user is a doctor
+            if (user.role !== 'doctor') {
+                return {
+                    success: false,
+                    error: "Only doctor users can be updated through this method"
+                };
+            }
+
+            // Update user in database
+            await updateUser(userId, updateData);
+
+            // Attempt to sync physician data with pharmacy
+            await this.syncDoctorFromUser(userId);
+
+            return {
+                success: true,
+                message: "Doctor updated successfully",
+            };
+
+        } catch (error) {
+            console.error('Error updating doctor:', error);
+            return {
+                success: false,
+                error: error instanceof Error ? error.message : 'Unknown error occurred'
+            };
+        }
+    }
 }
 
 export default UserService;
-export { UserToPatientValidationResult };
+export { UserToPatientValidationResult, UserToPhysicianValidationResult };

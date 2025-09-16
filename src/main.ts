@@ -1622,6 +1622,34 @@ app.put("/patient", authenticateJWT, async (req, res) => {
   }
 });
 
+app.put("/doctor", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "Not authenticated"
+      });
+    }
+
+    const result = await userService.updateUserDoctor(currentUser.id, req.body);
+
+    if (result.success) {
+      res.status(200).json(result);
+    } else {
+      res.status(400).json(result.error);
+    }
+  } catch (error) {
+    console.error('❌ Error updating patient:', error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error"
+    });
+  }
+});
+
+
 // Order endpoints
 app.post("/orders/approve", authenticateJWT, async (req, res) => {
   try {
