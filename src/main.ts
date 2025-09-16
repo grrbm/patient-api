@@ -19,6 +19,7 @@ import ShippingAddress from "./models/ShippingAddress";
 import { createJWTToken, authenticateJWT, getCurrentUser } from "./config/jwt";
 import { uploadToS3, deleteFromS3, isValidImageFile, isValidFileSize } from "./config/s3";
 import Stripe from "stripe";
+import { approveOrder } from "./services/order.service";
 
 // Helper function to generate unique clinic slug
 async function generateUniqueSlug(clinicName: string, excludeId?: string): Promise<string> {
@@ -1587,6 +1588,26 @@ app.get("/questionnaires/treatment/:treatmentId", async (req, res) => {
     });
   }
 });
+
+
+// Order endpoints
+app.post("/orders/approve", authenticateJWT, async (req, res) => {
+  try {
+
+    const { orderId } = req.body;
+
+    const result = approveOrder(orderId);
+
+    res.json(result);
+  } catch (error) {
+    console.error('❌ Error creating pharmacy order:', error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error"
+    });
+  }
+});
+
 
 const PORT = process.env.PORT || 3001;
 
