@@ -20,6 +20,7 @@ import { createJWTToken, authenticateJWT, getCurrentUser } from "./config/jwt";
 import { uploadToS3, deleteFromS3, isValidImageFile, isValidFileSize } from "./config/s3";
 import Stripe from "stripe";
 import { approveOrder } from "./services/order.service";
+import UserService from "./services/user.service";
 
 // Helper function to generate unique clinic slug
 async function generateUniqueSlug(clinicName: string, excludeId?: string): Promise<string> {
@@ -1589,6 +1590,37 @@ app.get("/questionnaires/treatment/:treatmentId", async (req, res) => {
   }
 });
 
+
+// Patient management endpoint
+const userService = new UserService();
+
+
+app.put("/patient", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "Not authenticated"
+      });
+    }
+
+    const result = await userService.updateUserPatient(currentUser.id, req.body);
+
+    if (result.success) {
+      res.status(200).json(result);
+    } else {
+      res.status(400).json(result.error);
+    }
+  } catch (error) {
+    console.error('❌ Error updating patient:', error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error"
+    });
+  }
+});
 
 // Order endpoints
 app.post("/orders/approve", authenticateJWT, async (req, res) => {
