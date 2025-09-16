@@ -2,6 +2,7 @@ import { Table, Column, DataType, ForeignKey, BelongsTo } from 'sequelize-typesc
 import bcrypt from 'bcrypt';
 import Entity from './Entity';
 import Clinic from './Clinic';
+import { PatientAllergy, PatientDisease, PatientMedication } from '../services/pharmacy/patient';
 
 @Table({
   freezeTableName: true,
@@ -109,6 +110,40 @@ export default class User extends Entity {
   })
   declare emergencyContact?: string;
 
+  // Pharmacy types:
+  @Column({
+    type: DataType.STRING,
+    allowNull: true,
+  })
+  declare pharmacyPatientId?: string;
+
+
+  @Column({
+    type: DataType.STRING,
+    allowNull: true,
+  })
+  declare gender?: string;
+
+  @Column({
+    type: DataType.JSON,
+    allowNull: true,
+  })
+  declare allergies?: PatientAllergy[];
+
+  @Column({
+    type: DataType.JSON,
+    allowNull: true,
+  })
+  declare diseases?: PatientDisease[];
+
+  @Column({
+    type: DataType.JSON,
+    allowNull: true,
+  })
+  declare medications?: PatientMedication[];
+
+
+
   @ForeignKey(() => Clinic)
   @Column({
     type: DataType.UUID,
@@ -170,7 +205,7 @@ export default class User extends Entity {
     phoneNumber?: string;
   }): Promise<User> {
     const passwordHash = await this.hashPassword(userData.password);
-    
+
     return this.create({
       firstName: userData.firstName,
       lastName: userData.lastName,
