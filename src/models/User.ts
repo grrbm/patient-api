@@ -3,6 +3,7 @@ import bcrypt from 'bcrypt';
 import Entity from './Entity';
 import Clinic from './Clinic';
 import { PatientAllergy, PatientDisease, PatientMedication } from '../services/pharmacy/patient';
+import { PhysicianLicense } from '../services/pharmacy/physician';
 
 @Table({
   freezeTableName: true,
@@ -142,7 +143,30 @@ export default class User extends Entity {
   })
   declare medications?: PatientMedication[];
 
+  // Physician/Doctor specific fields
+  @Column({
+    type: DataType.STRING,
+    allowNull: true,
+  })
+  declare deaNumber?: string;
 
+  @Column({
+    type: DataType.STRING,
+    allowNull: true,
+  })
+  declare npiNumber?: string;
+
+  @Column({
+    type: DataType.JSON,
+    allowNull: true,
+  })
+  declare licenses?: PhysicianLicense[];
+
+  @Column({
+    type: DataType.STRING,
+    allowNull: true,
+  })
+  declare pharmacyPhysicianId?: string;
 
   @ForeignKey(() => Clinic)
   @Column({
