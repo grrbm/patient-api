@@ -12,6 +12,10 @@ import Questionnaire from '../models/Questionnaire';
 import QuestionnaireStep from '../models/QuestionnaireStep';
 import Question from '../models/Question';
 import QuestionOption from '../models/QuestionOption';
+import Order from '../models/Order';
+import OrderItem from '../models/OrderItem';
+import Payment from '../models/Payment';
+import ShippingAddress from '../models/ShippingAddress';
 
 // Load environment variables from .env.local
 dotenv.config({ path: '.env.local' });
@@ -54,7 +58,7 @@ const sequelizeConfig = {
 
 export const sequelize = new Sequelize(databaseUrl, {
   ...sequelizeConfig,
-  models: [User, Entity, Product, Prescription, Treatment, PrescriptionProducts, TreatmentProducts, Clinic, Questionnaire, QuestionnaireStep, Question, QuestionOption],
+  models: [User, Entity, Product, Prescription, Treatment, PrescriptionProducts, TreatmentProducts, Clinic, Questionnaire, QuestionnaireStep, Question, QuestionOption, Order, OrderItem, Payment, ShippingAddress],
 });
 
 export async function initializeDatabase() {

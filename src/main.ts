@@ -12,6 +12,10 @@ import Questionnaire from "./models/Questionnaire";
 import QuestionnaireStep from "./models/QuestionnaireStep";
 import Question from "./models/Question";
 import QuestionOption from "./models/QuestionOption";
+import Order, { OrderStatus } from "./models/Order";
+import OrderItem from "./models/OrderItem";
+import Payment from "./models/Payment";
+import ShippingAddress from "./models/ShippingAddress";
 import { createJWTToken, authenticateJWT, getCurrentUser } from "./config/jwt";
 import { uploadToS3, deleteFromS3, isValidImageFile, isValidFileSize } from "./config/s3";
 import Stripe from "stripe";
@@ -1067,10 +1071,18 @@ app.get("/treatments/:id", async (req, res) => {
 });
 
 // Payment routes
-// Create payment intent
+// Create order and payment intent
 app.post("/create-payment-intent", authenticateJWT, async (req, res) => {
   try {
-    const { amount, currency = 'usd', treatmentId, selectedProducts } = req.body;
+    const {
+      amount,
+      currency = 'usd',
+      treatmentId,
+      selectedProducts = {},
+      selectedPlan = 'monthly',
+      shippingInfo = {},
+      questionnaireAnswers = {}
+    } = req.body;
     const currentUser = getCurrentUser(req);
 
     if (!currentUser) {
@@ -1088,52 +1100,145 @@ app.post("/create-payment-intent", authenticateJWT, async (req, res) => {
       });
     }
 
+    // Validate required fields
+    if (!treatmentId) {
+      return res.status(400).json({
+        success: false,
+        message: "Treatment ID is required"
+      });
+    }
+
+    // Get treatment with products to validate order
+    const treatment = await Treatment.findByPk(treatmentId, {
+      include: [
+        {
+          model: Product,
+          as: 'products',
+          through: {
+            attributes: ['dosage', 'numberOfDoses', 'nextDose']
+          }
+        }
+      ]
+    });
+
+    if (!treatment) {
+      return res.status(404).json({
+        success: false,
+        message: "Treatment not found"
+      });
+    }
+
+    // Create order
+    const orderNumber = Order.generateOrderNumber();
+    const order = await Order.create({
+      orderNumber,
+      userId: currentUser.id,
+      treatmentId,
+      questionnaireId: null, // Will be updated if questionnaire is available
+      status: 'pending',
+      billingPlan: selectedPlan,
+      subtotalAmount: amount,
+      discountAmount: 0,
+      taxAmount: 0,
+      shippingAmount: 0,
+      totalAmount: amount,
+      questionnaireAnswers
+    });
+
+    // Create order items
+    const orderItems = [];
+    for (const [productId, quantity] of Object.entries(selectedProducts)) {
+      if (quantity && Number(quantity) > 0) {
+        const product = treatment.products?.find(p => p.id === productId);
+        if (product) {
+          const orderItem = await OrderItem.create({
+            orderId: order.id,
+            productId: product.id,
+            quantity: Number(quantity),
+            unitPrice: product.price,
+            totalPrice: product.price * Number(quantity),
+            dosage: product.dosage
+          });
+          orderItems.push(orderItem);
+        }
+      }
+    }
+
+    // Create shipping address if provided
+    if (shippingInfo.address && shippingInfo.city && shippingInfo.state && shippingInfo.zipCode) {
+      await ShippingAddress.create({
+        orderId: order.id,
+        address: shippingInfo.address,
+        apartment: shippingInfo.apartment || null,
+        city: shippingInfo.city,
+        state: shippingInfo.state,
+        zipCode: shippingInfo.zipCode,
+        country: shippingInfo.country || 'US'
+      });
+    }
+
     // Create payment intent with Stripe
     const paymentIntent = await stripe.paymentIntents.create({
       amount: Math.round(amount * 100), // Convert to cents
       currency,
       metadata: {
         userId: currentUser.id,
-        treatmentId: treatmentId || '',
-        selectedProducts: JSON.stringify(selectedProducts || {}),
-        // HIPAA compliance: Don't include specific medical details
-        orderType: 'treatment_refill'
+        treatmentId,
+        orderId: order.id,
+        orderNumber: orderNumber,
+        selectedProducts: JSON.stringify(selectedProducts),
+        selectedPlan,
+        orderType: 'treatment_order'
       },
-      description: 'Treatment refill order',
+      description: `Order ${orderNumber} - ${treatment.name}`,
     });
 
-    console.log('💳 Payment intent created:', { 
-      id: paymentIntent.id, 
+    // Create payment record
+    await Payment.create({
+      orderId: order.id,
+      stripePaymentIntentId: paymentIntent.id,
+      status: 'pending',
+      paymentMethod: 'card',
+      amount,
+      currency: currency.toUpperCase()
+    });
+
+    console.log('💳 Order and payment intent created:', {
+      orderId: order.id,
+      orderNumber: orderNumber,
+      paymentIntentId: paymentIntent.id,
       amount: paymentIntent.amount,
-      userId: currentUser.id 
+      userId: currentUser.id
     });
 
     res.status(200).json({
       success: true,
       data: {
         clientSecret: paymentIntent.client_secret,
-        paymentIntentId: paymentIntent.id
+        paymentIntentId: paymentIntent.id,
+        orderId: order.id,
+        orderNumber: orderNumber
       }
     });
 
   } catch (error) {
-    console.error('Error creating payment intent:', error);
-    
+    console.error('Error creating order and payment intent:', error);
+
     // Log specific error details for debugging
     if (error instanceof Error) {
       console.error('Error message:', error.message);
       console.error('Error stack:', error.stack);
     }
-    
+
     // Check if it's a Stripe error
     if (error && typeof error === 'object' && 'type' in error) {
       console.error('Stripe error type:', (error as any).type);
       console.error('Stripe error code:', (error as any).code);
     }
-    
+
     res.status(500).json({
       success: false,
-      message: "Failed to create payment intent",
+      message: "Failed to create order and payment intent",
       error: process.env.NODE_ENV === 'development' ? (error instanceof Error ? error.message : String(error)) : undefined
     });
   }
@@ -1162,11 +1267,11 @@ app.post("/confirm-payment", authenticateJWT, async (req, res) => {
       // 2. Send confirmation email
       // 3. Update inventory
       // 4. Create prescription records, etc.
-      
-      console.log('💳 Payment confirmed:', { 
-        id: paymentIntent.id, 
+
+      console.log('💳 Payment confirmed:', {
+        id: paymentIntent.id,
         amount: paymentIntent.amount,
-        userId: currentUser.id 
+        userId: currentUser.id
       });
 
       res.status(200).json({
@@ -1193,6 +1298,236 @@ app.post("/confirm-payment", authenticateJWT, async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to confirm payment"
+    });
+  }
+});
+
+// Stripe webhook endpoint
+app.post("/webhook/stripe", express.raw({ type: 'application/json' }), async (req, res) => {
+  const sig = req.headers['stripe-signature'];
+  const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
+
+  if (!endpointSecret) {
+    console.error('❌ STRIPE_WEBHOOK_SECRET not configured');
+    return res.status(400).send('Webhook secret not configured');
+  }
+
+  let event;
+
+  try {
+    // Verify webhook signature
+    event = stripe.webhooks.constructEvent(req.body, sig!, endpointSecret);
+  } catch (err: any) {
+    console.error('❌ Webhook signature verification failed:', err.message);
+    return res.status(400).send(`Webhook Error: ${err.message}`);
+  }
+
+  console.log('🎣 Stripe webhook event received:', event.type);
+
+  try {
+    // Handle the event
+    switch (event.type) {
+      case 'payment_intent.succeeded':
+        const paymentIntent = event.data.object;
+        console.log('💳 Payment succeeded:', paymentIntent.id);
+
+        // Find payment record
+        const payment = await Payment.findOne({
+          where: { stripePaymentIntentId: paymentIntent.id },
+          include: [{ model: Order, as: 'order' }]
+        });
+
+        if (payment) {
+          // Update payment status
+          await payment.updateFromStripeEvent(event.data);
+
+          // Update order status
+          await payment.order.updateStatus(OrderStatus.PAID);
+
+          console.log('✅ Order updated to paid status:', payment.order.orderNumber);
+        } else {
+          console.error('❌ Payment record not found for payment intent:', paymentIntent.id);
+        }
+        break;
+
+      case 'payment_intent.payment_failed':
+        const failedPayment = event.data.object;
+        console.log('❌ Payment failed:', failedPayment.id);
+
+        // Find payment record
+        const failedPaymentRecord = await Payment.findOne({
+          where: { stripePaymentIntentId: failedPayment.id },
+          include: [{ model: Order, as: 'order' }]
+        });
+
+        if (failedPaymentRecord) {
+          // Update payment status
+          await failedPaymentRecord.updateFromStripeEvent(event.data);
+
+          // Update order status
+          await failedPaymentRecord.order.updateStatus(OrderStatus.CANCELLED);
+
+          console.log('❌ Order updated to cancelled status:', failedPaymentRecord.order.orderNumber);
+        }
+        break;
+
+      case 'payment_intent.canceled':
+        const cancelledPayment = event.data.object;
+        console.log('🚫 Payment cancelled:', cancelledPayment.id);
+
+        // Find payment record
+        const cancelledPaymentRecord = await Payment.findOne({
+          where: { stripePaymentIntentId: cancelledPayment.id },
+          include: [{ model: Order, as: 'order' }]
+        });
+
+        if (cancelledPaymentRecord) {
+          // Update payment status
+          await cancelledPaymentRecord.updateFromStripeEvent(event.data);
+
+          // Update order status
+          await cancelledPaymentRecord.order.updateStatus(OrderStatus.CANCELLED);
+
+          console.log('🚫 Order updated to cancelled status:', cancelledPaymentRecord.order.orderNumber);
+        }
+        break;
+
+      case 'charge.dispute.created':
+        const dispute = event.data.object;
+        console.log('⚠️ Dispute created:', dispute.id);
+
+        // Find payment by charge ID
+        const disputedPayment = await Payment.findOne({
+          where: { stripeChargeId: dispute.charge },
+          include: [{ model: Order, as: 'order' }]
+        });
+
+        if (disputedPayment) {
+          // Update order status to refunded (dispute handling)
+          await disputedPayment.order.updateStatus(OrderStatus.REFUNDED);
+          console.log('⚠️ Order marked as disputed:', disputedPayment.order.orderNumber);
+        }
+        break;
+
+      default:
+        console.log(`🔍 Unhandled event type ${event.type}`);
+    }
+
+    // Return a 200 response to acknowledge receipt of the event
+    res.status(200).json({ received: true });
+
+  } catch (error) {
+    console.error('❌ Error processing webhook:', error);
+    res.status(500).json({ error: 'Webhook processing failed' });
+  }
+});
+
+// Get orders for a user
+app.get("/orders", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "Not authenticated"
+      });
+    }
+
+    const orders = await Order.findAll({
+      where: { userId: currentUser.id },
+      include: [
+        {
+          model: OrderItem,
+          as: 'orderItems',
+          include: [{ model: Product, as: 'product' }]
+        },
+        {
+          model: Payment,
+          as: 'payment'
+        },
+        {
+          model: ShippingAddress,
+          as: 'shippingAddress'
+        },
+        {
+          model: Treatment,
+          as: 'treatment'
+        }
+      ],
+      order: [['createdAt', 'DESC']]
+    });
+
+    res.status(200).json({
+      success: true,
+      data: orders
+    });
+
+  } catch (error) {
+    console.error('Error fetching orders:', error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch orders"
+    });
+  }
+});
+
+// Get single order
+app.get("/orders/:id", authenticateJWT, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const currentUser = getCurrentUser(req);
+
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "Not authenticated"
+      });
+    }
+
+    const order = await Order.findOne({
+      where: {
+        id,
+        userId: currentUser.id // Ensure user can only access their own orders
+      },
+      include: [
+        {
+          model: OrderItem,
+          as: 'orderItems',
+          include: [{ model: Product, as: 'product' }]
+        },
+        {
+          model: Payment,
+          as: 'payment'
+        },
+        {
+          model: ShippingAddress,
+          as: 'shippingAddress'
+        },
+        {
+          model: Treatment,
+          as: 'treatment'
+        }
+      ]
+    });
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: "Order not found"
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: order
+    });
+
+  } catch (error) {
+    console.error('Error fetching order:', error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch order"
     });
   }
 });
