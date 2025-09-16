@@ -20,6 +20,7 @@ import { createJWTToken, authenticateJWT, getCurrentUser } from "./config/jwt";
 import { uploadToS3, deleteFromS3, isValidImageFile, isValidFileSize } from "./config/s3";
 import Stripe from "stripe";
 import { approveOrder } from "./services/order.service";
+import OrderService from "./services/order.service";
 import UserService from "./services/user.service";
 import TreatmentService from "./services/treatment.service";
 
@@ -1592,9 +1593,9 @@ app.get("/questionnaires/treatment/:treatmentId", async (req, res) => {
 });
 
 
-// Patient management endpoint
 const userService = new UserService();
 const treatmentService = new TreatmentService();
+const orderService = new OrderService();
 
 
 app.put("/patient", authenticateJWT, async (req, res) => {
@@ -1683,6 +1684,45 @@ app.put("/treatments/:id/products", authenticateJWT, async (req, res) => {
 });
 
 // Order endpoints
+app.get("/orders/by-clinic/:clinicId", authenticateJWT, async (req, res) => {
+  try {
+    const { clinicId } = req.params;
+    const { page, limit } = req.query;
+    const currentUser = getCurrentUser(req);
+
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "Not authenticated"
+      });
+    }
+
+    const paginationParams = {
+      page: page ? parseInt(page as string) : undefined,
+      limit: limit ? parseInt(limit as string) : undefined
+    };
+
+    const result = await orderService.listOrdersByClinic(clinicId, currentUser.id, paginationParams);
+
+    if (result.success) {
+      res.status(200).json(result);
+    } else {
+      if (result.message === "Forbidden") {
+        res.status(403).json(result);
+      } else {
+        res.status(400).json(result);
+      }
+    }
+
+  } catch (error) {
+    console.error('❌ Error listing orders by clinic:', error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error"
+    });
+  }
+});
+
 app.post("/orders/approve", authenticateJWT, async (req, res) => {
   try {
 
