@@ -21,6 +21,7 @@ import { uploadToS3, deleteFromS3, isValidImageFile, isValidFileSize } from "./c
 import Stripe from "stripe";
 import { approveOrder } from "./services/order.service";
 import UserService from "./services/user.service";
+import TreatmentService from "./services/treatment.service";
 
 // Helper function to generate unique clinic slug
 async function generateUniqueSlug(clinicName: string, excludeId?: string): Promise<string> {
@@ -1593,6 +1594,7 @@ app.get("/questionnaires/treatment/:treatmentId", async (req, res) => {
 
 // Patient management endpoint
 const userService = new UserService();
+const treatmentService = new TreatmentService();
 
 
 app.put("/patient", authenticateJWT, async (req, res) => {
@@ -1649,6 +1651,36 @@ app.put("/doctor", authenticateJWT, async (req, res) => {
   }
 });
 
+// Treatment product association endpoint
+app.put("/treatments/:id/products", authenticateJWT, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { productIds = [] } = req.body;
+    const currentUser = getCurrentUser(req);
+
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "Not authenticated"
+      });
+    }
+
+    const result = await treatmentService.associateProductsWithTreatment(id, productIds, currentUser.id);
+
+    if (result.success) {
+      res.status(200).json(result);
+    } else {
+      res.status(400).json(result);
+    }
+
+  } catch (error) {
+    console.error('❌ Error associating products with treatment:', error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error"
+    });
+  }
+});
 
 // Order endpoints
 app.post("/orders/approve", authenticateJWT, async (req, res) => {
