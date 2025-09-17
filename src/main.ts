@@ -12,7 +12,7 @@ import Questionnaire from "./models/Questionnaire";
 import QuestionnaireStep from "./models/QuestionnaireStep";
 import Question from "./models/Question";
 import QuestionOption from "./models/QuestionOption";
-import Order, { OrderStatus } from "./models/Order";
+import Order from "./models/Order";
 import OrderItem from "./models/OrderItem";
 import Payment from "./models/Payment";
 import ShippingAddress from "./models/ShippingAddress";
@@ -23,6 +23,7 @@ import OrderService from "./services/order.service";
 import UserService from "./services/user.service";
 import TreatmentService from "./services/treatment.service";
 import PaymentService from "./services/payment.service";
+import { processStripeWebhook } from "./services/stripe/webhook";
 import TreatmentProducts from "./models/TreatmentProducts";
 
 // Helper function to generate unique clinic slug
@@ -1338,93 +1339,8 @@ app.post("/webhook/stripe", express.raw({ type: 'application/json' }), async (re
   console.log('🎣 Stripe webhook event received:', event.type);
 
   try {
-    // Handle the event
-    switch (event.type) {
-      case 'payment_intent.succeeded':
-        const paymentIntent = event.data.object;
-        console.log('💳 Payment succeeded:', paymentIntent.id);
-
-        // Find payment record
-        const payment = await Payment.findOne({
-          where: { stripePaymentIntentId: paymentIntent.id },
-          include: [{ model: Order, as: 'order' }]
-        });
-
-        if (payment) {
-          // Update payment status
-          await payment.updateFromStripeEvent(event.data);
-
-          // Update order status
-          await payment.order.updateStatus(OrderStatus.PAID);
-
-          console.log('✅ Order updated to paid status:', payment.order.orderNumber);
-        } else {
-          console.error('❌ Payment record not found for payment intent:', paymentIntent.id);
-        }
-        break;
-
-      case 'payment_intent.payment_failed':
-        const failedPayment = event.data.object;
-        console.log('❌ Payment failed:', failedPayment.id);
-
-        // Find payment record
-        const failedPaymentRecord = await Payment.findOne({
-          where: { stripePaymentIntentId: failedPayment.id },
-          include: [{ model: Order, as: 'order' }]
-        });
-
-        if (failedPaymentRecord) {
-          // Update payment status
-          await failedPaymentRecord.updateFromStripeEvent(event.data);
-
-          // Update order status
-          await failedPaymentRecord.order.updateStatus(OrderStatus.CANCELLED);
-
-          console.log('❌ Order updated to cancelled status:', failedPaymentRecord.order.orderNumber);
-        }
-        break;
-
-      case 'payment_intent.canceled':
-        const cancelledPayment = event.data.object;
-        console.log('🚫 Payment cancelled:', cancelledPayment.id);
-
-        // Find payment record
-        const cancelledPaymentRecord = await Payment.findOne({
-          where: { stripePaymentIntentId: cancelledPayment.id },
-          include: [{ model: Order, as: 'order' }]
-        });
-
-        if (cancelledPaymentRecord) {
-          // Update payment status
-          await cancelledPaymentRecord.updateFromStripeEvent(event.data);
-
-          // Update order status
-          await cancelledPaymentRecord.order.updateStatus(OrderStatus.CANCELLED);
-
-          console.log('🚫 Order updated to cancelled status:', cancelledPaymentRecord.order.orderNumber);
-        }
-        break;
-
-      case 'charge.dispute.created':
-        const dispute = event.data.object;
-        console.log('⚠️ Dispute created:', dispute.id);
-
-        // Find payment by charge ID
-        const disputedPayment = await Payment.findOne({
-          where: { stripeChargeId: dispute.charge },
-          include: [{ model: Order, as: 'order' }]
-        });
-
-        if (disputedPayment) {
-          // Update order status to refunded (dispute handling)
-          await disputedPayment.order.updateStatus(OrderStatus.REFUNDED);
-          console.log('⚠️ Order marked as disputed:', disputedPayment.order.orderNumber);
-        }
-        break;
-
-      default:
-        console.log(`🔍 Unhandled event type ${event.type}`);
-    }
+    // Process the event using the webhook service
+    await processStripeWebhook(event);
 
     // Return a 200 response to acknowledge receipt of the event
     res.status(200).json({ received: true });
