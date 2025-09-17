@@ -13,7 +13,28 @@ interface TreatmentProductAssociationResult {
     message: string;
     error?: string;
 }
+
+interface UpdateTreatmentData {
+    name?: string;
+    price?: number;
+    products?: TreatmentProductData[];
+}
+
+interface UpdateTreatmentResult {
+    success: boolean;
+    message: string;
+    data?: {
+        id: string;
+        name: string;
+        price: number;
+        treatmentLogo: string;
+        productsPrice: number;
+    };
+    error?: string;
+}
+
 const MARKUP = 10;
+
 class TreatmentService {
     async associateProductsWithTreatment(
         treatmentId: string,
@@ -66,7 +87,6 @@ class TreatmentService {
                     error: "products must be an array"
                 };
             }
-
 
             // Validate each product object has required fields
             for (const product of products) {
@@ -155,8 +175,104 @@ class TreatmentService {
         }
     }
 
+    async updateTreatment(
+        treatmentId: string,
+        updateData: UpdateTreatmentData,
+        userId: string
+    ): Promise<UpdateTreatmentResult> {
+        try {
+            // Get user and validate they are a doctor
+            const user = await User.findByPk(userId);
+            if (!user) {
+                return {
+                    success: false,
+                    message: "User not found",
+                    error: "User with the provided ID does not exist"
+                };
+            }
 
+            if (user.role !== 'doctor') {
+                return {
+                    success: false,
+                    message: "Access denied",
+                    error: "Only doctors can update treatments"
+                };
+            }
+
+            // Get treatment and validate ownership
+            const treatment = await getTreatment(treatmentId);
+            if (!treatment) {
+                return {
+                    success: false,
+                    message: "Treatment not found",
+                    error: "Treatment with the provided ID does not exist"
+                };
+            }
+
+            // Verify treatment belongs to user's clinic
+            if (treatment.clinicId !== user.clinicId) {
+                return {
+                    success: false,
+                    message: "Access denied",
+                    error: "Treatment does not belong to your clinic"
+                };
+            }
+
+            // Update treatment fields
+            const updateFields: any = {};
+            if (updateData.name !== undefined) {
+                updateFields.name = updateData.name.trim();
+            }
+            if (updateData.price !== undefined) {
+                updateFields.price = updateData.price;
+            }
+
+            if (Object.keys(updateFields).length > 0) {
+                await treatment.update(updateFields);
+            }
+
+            // Update products if provided
+            if (updateData.products !== undefined) {
+                const associationResult = await this.associateProductsWithTreatment(
+                    treatmentId,
+                    updateData.products,
+                    userId
+                );
+
+                if (!associationResult.success) {
+                    return {
+                        success: false,
+                        message: "Failed to update treatment products",
+                        error: associationResult.error
+                    };
+                }
+            }
+
+            // Reload treatment to get updated data
+            await treatment.reload();
+
+            return {
+                success: true,
+                message: "Treatment updated successfully",
+                data: {
+                    id: treatment.id,
+                    name: treatment.name,
+                    price: treatment.price,
+                    treatmentLogo: treatment.treatmentLogo,
+                    productsPrice: treatment.productsPrice
+                }
+            };
+
+        } catch (error) {
+            console.error('Error updating treatment:', error);
+            return {
+                success: false,
+                message: "Failed to update treatment",
+                error: error instanceof Error ? error.message : 'Unknown error occurred'
+            };
+        }
+    }
 }
 
 export default TreatmentService;
-export { TreatmentProductAssociationResult, TreatmentProductData };
+export { TreatmentProductAssociationResult, TreatmentProductData, UpdateTreatmentData, UpdateTreatmentResult };

@@ -957,7 +957,7 @@ app.post("/treatments", authenticateJWT, async (req, res) => {
 app.put("/treatments/:id", authenticateJWT, async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, products } = req.body;
+
     const currentUser = getCurrentUser(req);
 
     if (!currentUser) {
@@ -967,63 +967,19 @@ app.put("/treatments/:id", authenticateJWT, async (req, res) => {
       });
     }
 
-    // Fetch full user data from database to get clinicId
-    const user = await User.findByPk(currentUser.id);
-    if (!user) {
-      return res.status(401).json({
-        success: false,
-        message: "User not found"
-      });
-    }
 
-    // Only allow doctors to update treatments
-    if (user.role !== 'doctor') {
-      return res.status(403).json({
-        success: false,
-        message: "Only doctors can update treatments"
-      });
-    }
+    const treatment = await treatmentService.updateTreatment(id, req.body, currentUser.id)
 
-    // Validate input
-    if (!name || !name.trim()) {
-      return res.status(400).json({
-        success: false,
-        message: "Treatment name is required"
-      });
-    }
-
-    const treatment = await Treatment.findByPk(id);
-    if (!treatment) {
-      return res.status(404).json({
-        success: false,
-        message: "Treatment not found"
-      });
-    }
-
-    // Verify treatment belongs to user's clinic
-    if (treatment.clinicId !== user.clinicId) {
-      return res.status(403).json({
-        success: false,
-        message: "Access denied"
-      });
-    }
-
-    // Update treatment
-    await treatment.update({
-      name: name.trim()
-    });
-
-    console.log('💊 Treatment updated:', { id: treatment.id, name: treatment.name });
-
-    await treatmentService.associateProductsWithTreatment(id, products, currentUser.id);
 
     res.status(200).json({
       success: true,
       message: "Treatment updated successfully",
       data: {
-        id: treatment.id,
-        name: treatment.name,
-        treatmentLogo: treatment.treatmentLogo,
+        id: treatment?.data?.id,
+        name: treatment?.data?.name,
+        price: treatment?.data?.price,
+        productsPrice: treatment?.data?.productsPrice,
+        treatmentLogo: treatment?.data?.treatmentLogo,
       }
     });
 
