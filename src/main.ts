@@ -22,6 +22,7 @@ import Stripe from "stripe";
 import OrderService from "./services/order.service";
 import UserService from "./services/user.service";
 import TreatmentService from "./services/treatment.service";
+import PaymentService from "./services/payment.service";
 import TreatmentProducts from "./models/TreatmentProducts";
 
 // Helper function to generate unique clinic slug
@@ -79,7 +80,7 @@ if (!process.env.STRIPE_SECRET_KEY) {
 }
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2025-02-24.acacia',
+  apiVersion: '2025-08-27.basil',
 });
 
 // Configure multer for file uploads (store in memory)
@@ -1257,6 +1258,59 @@ app.post("/confirm-payment", authenticateJWT, async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to confirm payment"
+    });
+  }
+});
+
+// Create subscription for treatment
+app.post("/payments/treatment/sub", authenticateJWT, async (req, res) => {
+  try {
+    const { treatmentId, billingPlan = 'monthly' } = req.body;
+    const currentUser = getCurrentUser(req);
+
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "Not authenticated"
+      });
+    }
+
+    // Validate required fields
+    if (!treatmentId) {
+      return res.status(400).json({
+        success: false,
+        message: "Treatment ID is required"
+      });
+    }
+
+    // Validate billing plan
+    // TODO only monthly is supported now
+    const validPlans = ['monthly', 'quarterly', 'biannual'];
+    if (!validPlans.includes(billingPlan)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid billing plan. Must be one of: monthly, quarterly, biannual"
+      });
+    }
+
+    const paymentService = new PaymentService();
+    const result = await paymentService.subscribeTreatment(
+      treatmentId,
+      currentUser.id,
+      billingPlan
+    );
+
+    if (result.success) {
+      res.status(200).json(result);
+    } else {
+      res.status(400).json(result);
+    }
+
+  } catch (error) {
+    console.error('Error creating treatment subscription:', error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error"
     });
   }
 });
