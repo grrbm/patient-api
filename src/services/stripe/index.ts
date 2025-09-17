@@ -8,7 +8,7 @@ const FRONTEND_URL = process.env.FRONTEND_URL || "localhost:3000"
 interface CheckoutSubParams {
   line_items: Stripe.Checkout.SessionCreateParams.LineItem[];
   stripeCustomerId: string;
-  metadata:{
+  metadata: {
     userId: string;
     orderId: string;
     treatmentId: string;
@@ -37,7 +37,6 @@ class StripeService {
   }
 
   async createCustomer(email: string, name?: string) {
-
     return stripe.customers.create({
       email,
       name
@@ -46,8 +45,20 @@ class StripeService {
   }
 
   async getCustomer(customerId: string) {
-
     return stripe.customers.retrieve(customerId);
+  }
+
+  async getPaymentIntent(paymentIntentId: string) {
+    return stripe.paymentIntents.retrieve(
+      paymentIntentId,
+      { expand: ["customer", "invoice"] }
+    );
+  }
+
+  async getInvoice(invoiceId: string) {
+    return stripe.invoices.retrieve(invoiceId, {
+      expand: ["subscription"]
+    });
   }
 
   async createProductWithPrice(
@@ -96,16 +107,6 @@ class StripeService {
     });
   }
 
-  // Helper method to construct webhook event
-  constructWebhookEvent(payload: string | Buffer, signature: string): Stripe.Event | null {
-    try {
-      const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!;
-      return stripe.webhooks.constructEvent(payload, signature, webhookSecret);
-    } catch (error) {
-      console.error('Error constructing webhook event:', error);
-      return null;
-    }
-  }
 }
 
 export default StripeService;
