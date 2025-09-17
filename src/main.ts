@@ -22,6 +22,7 @@ import Stripe from "stripe";
 import OrderService from "./services/order.service";
 import UserService from "./services/user.service";
 import TreatmentService from "./services/treatment.service";
+import TreatmentProducts from "./models/TreatmentProducts";
 
 // Helper function to generate unique clinic slug
 async function generateUniqueSlug(clinicName: string, excludeId?: string): Promise<string> {
@@ -956,7 +957,7 @@ app.post("/treatments", authenticateJWT, async (req, res) => {
 app.put("/treatments/:id", authenticateJWT, async (req, res) => {
   try {
     const { id } = req.params;
-    const { name } = req.body;
+    const { name, products } = req.body;
     const currentUser = getCurrentUser(req);
 
     if (!currentUser) {
@@ -1014,6 +1015,8 @@ app.put("/treatments/:id", authenticateJWT, async (req, res) => {
 
     console.log('💊 Treatment updated:', { id: treatment.id, name: treatment.name });
 
+    await treatmentService.associateProductsWithTreatment(id, products, currentUser.id);
+
     res.status(200).json({
       success: true,
       message: "Treatment updated successfully",
@@ -1041,11 +1044,8 @@ app.get("/treatments/:id", async (req, res) => {
     const treatment = await Treatment.findByPk(id, {
       include: [
         {
-          model: Product,
-          as: 'products',
-          through: {
-            attributes: ['dosage', 'numberOfDoses', 'nextDose']
-          }
+          model: TreatmentProducts,
+          as: 'treatmentProducts',
         }
       ]
     });
@@ -1644,37 +1644,6 @@ app.put("/doctor", authenticateJWT, async (req, res) => {
     }
   } catch (error) {
     console.error('❌ Error updating patient:', error);
-    res.status(500).json({
-      success: false,
-      message: "Internal server error"
-    });
-  }
-});
-
-// Treatment product association endpoint
-app.put("/treatments/:id/products", authenticateJWT, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { productIds = [] } = req.body;
-    const currentUser = getCurrentUser(req);
-
-    if (!currentUser) {
-      return res.status(401).json({
-        success: false,
-        message: "Not authenticated"
-      });
-    }
-
-    const result = await treatmentService.associateProductsWithTreatment(id, productIds, currentUser.id);
-
-    if (result.success) {
-      res.status(200).json(result);
-    } else {
-      res.status(400).json(result);
-    }
-
-  } catch (error) {
-    console.error('❌ Error associating products with treatment:', error);
     res.status(500).json({
       success: false,
       message: "Internal server error"

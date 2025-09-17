@@ -1,17 +1,23 @@
 import Product from '../models/Product';
 import User from '../models/User';
+import TreatmentProducts from '../models/TreatmentProducts';
 import { getTreatment } from './db/treatment';
+
+interface TreatmentProductData {
+    productId: string;
+    dosage: string;
+}
 
 interface TreatmentProductAssociationResult {
     success: boolean;
     message: string;
     error?: string;
 }
-
+const MARKUP = 10;
 class TreatmentService {
     async associateProductsWithTreatment(
         treatmentId: string,
-        productIds: string[],
+        products: TreatmentProductData[],
         userId: string
     ): Promise<TreatmentProductAssociationResult> {
         try {
@@ -52,23 +58,36 @@ class TreatmentService {
                 };
             }
 
-            // Validate productIds is an array
-            if (!Array.isArray(productIds)) {
+            // Validate products is an array
+            if (!Array.isArray(products)) {
                 return {
                     success: false,
                     message: "Invalid input",
-                    error: "productIds must be an array"
+                    error: "products must be an array"
                 };
             }
 
+
+            // Validate each product object has required fields
+            for (const product of products) {
+                if (!product.productId || !product.dosage) {
+                    return {
+                        success: false,
+                        message: "Invalid product data",
+                        error: "Each product must have productId and dosage"
+                    };
+                }
+            }
+
             // Validate that all products exist
-            if (productIds.length > 0) {
-                const products = await Product.findAll({
+            if (products.length > 0) {
+                const productIds = products.map(p => p.productId);
+                const existingProducts = await Product.findAll({
                     where: { id: productIds }
                 });
 
-                if (products.length !== productIds.length) {
-                    const foundIds = products.map(p => p.id);
+                if (existingProducts.length !== productIds.length) {
+                    const foundIds = existingProducts.map(p => p.id);
                     const missingIds = productIds.filter(id => !foundIds.includes(id));
 
                     return {
@@ -79,22 +98,55 @@ class TreatmentService {
                 }
             }
 
-            // Remove all existing associations for this treatment
-            // This ensures we override/replace existing associations
-            await treatment.$set('products', []);
+            // Remove all existing TreatmentProducts associations for this treatment
+            await TreatmentProducts.destroy({
+                where: { treatmentId: treatmentId },
+                force: true,
+            });
 
-            // Add new associations
-            if (productIds.length > 0) {
-                await treatment.$add('products', productIds);
+            // Add new associations with dosage
+            if (products.length > 0) {
+                // Create TreatmentProducts records with dosage individually to ensure proper associations
+                for (const product of products) {
+                    await TreatmentProducts.upsert({
+                        treatmentId: treatmentId,
+                        productId: product.productId,
+                        dosage: product.dosage
+                    });
+                }
+
+                console.log(`✅ Created ${products.length} TreatmentProducts for treatment ${treatmentId}`);
+
+                // Calculate products price with markup
+                const productIds = products.map(p => p.productId);
+                const existingProducts = await Product.findAll({
+                    where: { id: productIds }
+                });
+
+                const totalProductsPrice = existingProducts.reduce((sum, product) => sum + product.price, 0);
+                const markupAmount = (totalProductsPrice * MARKUP) / 100;
+                const finalProductsPrice = totalProductsPrice + markupAmount;
+
+                // Update treatment's productsPrice
+                await treatment.update({
+                    productsPrice: finalProductsPrice
+                });
+            } else {
+                // If no products, set productsPrice to 0
+                await treatment.update({
+                    productsPrice: 0
+                });
             }
 
             return {
                 success: true,
-                message: `Successfully associated ${productIds.length} products with treatment`,
+                message: `Successfully associated ${products.length} products with treatment`,
             };
 
         } catch (error) {
             console.error('Error associating products with treatment:', error);
+            console.error('Error associating products with treatment:', JSON.stringify(error));
+
             return {
                 success: false,
                 message: "Failed to associate products with treatment",
@@ -103,8 +155,8 @@ class TreatmentService {
         }
     }
 
-  
+
 }
 
 export default TreatmentService;
-export { TreatmentProductAssociationResult };
+export { TreatmentProductAssociationResult, TreatmentProductData };
