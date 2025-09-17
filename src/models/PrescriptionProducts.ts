@@ -20,6 +20,12 @@ export default class PrescriptionProducts extends Entity {
     })
     declare quantity: number;
 
+    @Column({
+        type: DataType.STRING,
+        allowNull: true,
+    })
+    declare pharmacyProductId?: string;
+
     @ForeignKey(() => Product)
     @Column({
         type: DataType.UUID,

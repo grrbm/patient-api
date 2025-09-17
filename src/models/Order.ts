@@ -18,6 +18,14 @@ export enum OrderStatus {
   REFUNDED = 'refunded'
 }
 
+export enum OrderShippingStatus {
+  PENDING = 'pending',
+  PROCESSING = 'processing',
+  SHIPPED = 'shipped',
+  DELIVERED = 'delivered',
+  CANCELLED = 'cancelled',
+}
+
 export enum BillingPlan {
   MONTHLY = 'monthly',
   QUARTERLY = 'quarterly',
@@ -136,6 +144,24 @@ export default class Order extends Entity {
   })
   declare deliveredAt?: Date;
 
+  @Column({
+    type: DataType.STRING,
+    allowNull: true,
+  })
+  declare pharmacyOrderId?: string;
+
+  @Column({
+    type: DataType.STRING,
+    allowNull: true,
+  })
+  declare stripeSubscriptionId?: string;
+
+  @Column({
+    type: DataType.DATE,
+    allowNull: true,
+  })
+  declare paidAt?: Date;
+
   @HasMany(() => OrderItem)
   declare orderItems: OrderItem[];
 
@@ -158,20 +184,30 @@ export default class Order extends Entity {
     const discount = this.discountAmount || 0;
     const tax = this.taxAmount || 0;
     const shipping = this.shippingAmount || 0;
-    
+
     return subtotal - discount + tax + shipping;
   }
 
   // Update order status
   public async updateStatus(status: OrderStatus): Promise<void> {
     this.status = status;
-    
+
     if (status === OrderStatus.SHIPPED) {
       this.shippedAt = new Date();
     } else if (status === OrderStatus.DELIVERED) {
       this.deliveredAt = new Date();
     }
+
+    await this.save();
+  }
+
+  public async markOrderAsPaid(stripeSubscriptionId:string): Promise<void> {
+    this.stripeSubscriptionId = stripeSubscriptionId;
+    this.status = OrderStatus.PAID;
+    this.paidAt = new Date()
+
     
+
     await this.save();
   }
 }

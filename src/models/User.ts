@@ -168,6 +168,12 @@ export default class User extends Entity {
   })
   declare pharmacyPhysicianId?: string;
 
+  @Column({
+    type: DataType.STRING,
+    allowNull: true,
+  })
+  declare stripeCustomerId?: string;
+
   @ForeignKey(() => Clinic)
   @Column({
     type: DataType.UUID,
