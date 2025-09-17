@@ -19,7 +19,6 @@ import ShippingAddress from "./models/ShippingAddress";
 import { createJWTToken, authenticateJWT, getCurrentUser } from "./config/jwt";
 import { uploadToS3, deleteFromS3, isValidImageFile, isValidFileSize } from "./config/s3";
 import Stripe from "stripe";
-import { approveOrder } from "./services/order.service";
 import OrderService from "./services/order.service";
 import UserService from "./services/user.service";
 import TreatmentService from "./services/treatment.service";
@@ -1728,7 +1727,16 @@ app.post("/orders/approve", authenticateJWT, async (req, res) => {
 
     const { orderId } = req.body;
 
-    const result = approveOrder(orderId);
+    const currentUser = getCurrentUser(req);
+
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "Not authenticated"
+      });
+    }
+
+    const result = await orderService.approveOrder(orderId, currentUser.id);
 
     res.json(result);
   } catch (error) {

@@ -1,6 +1,11 @@
-import { getOrder, listOrdersByClinic } from "./db/order";
+import { listOrdersByClinic } from "./db/order";
 import { getUser } from "./db/user";
-import { OrderService } from "./pharmacy";
+import { OrderService as PharmacyOrderService } from "./pharmacy";
+import Order from '../models/Order';
+import User from '../models/User';
+import OrderItem from '../models/OrderItem';
+import Product from '../models/Product';
+import { OrderStatus } from '../models/Order';
 
 
 interface ListOrdersByClinicResult {
@@ -23,7 +28,17 @@ interface PaginationParams {
     limit?: number;
 }
 
-class OrderServiceClass {
+class OrderService {
+
+    // Prepare pharmacy order data from database
+    private pharmacyOrderService = new PharmacyOrderService();
+
+    constructor() {
+        this.pharmacyOrderService = new PharmacyOrderService();
+
+    }
+
+
     async listOrdersByClinic(
         clinicId: string,
         userId: string,
@@ -87,37 +102,154 @@ class OrderServiceClass {
             };
         }
     }
-}
+    async approveOrder(orderId: string, userId: string) {
+        try {
+            // Get order with all related data
+            const order = await Order.findOne({
+                where: { id: orderId },
+                include: [
+                    {
+                        model: User,
+                        as: 'user',
+                        attributes: ['id', 'firstName', 'lastName', 'email', 'pharmacyPatientId', 'clinicId']
+                    },
+                    {
+                        model: OrderItem,
+                        as: 'orderItems',
+                        include: [
+                            {
+                                model: Product,
+                                as: 'product',
+                                attributes: ['id', 'name', 'pharmacyProductId', 'dosage']
+                            }
+                        ]
+                    }
+                ]
+            });
 
-export const approveOrder = async (orderId: string) => {
-    const order = getOrder(orderId)
-    if (!order) {
-        throw Error("Order not found")
-    }
-
-    const orderService = new OrderService();
-
-    await orderService.createOrder({
-        "patient_id": 1,
-        "physician_id": 1,
-        "ship_to_clinic": 0,
-        "service_type": "two_day",
-        "signature_required": 1,
-        "memo": "Test memo",
-        "external_id": "testing",
-        "test_order": 1,
-        "products": [
-            {
-                "sku": 1213,
-                "quantity": 30,
-                "refills": 2,
-                "days_supply": 30,
-                "sig": "Use as directed",
-                "medical_necessity": "Patient has a history of diabetes and requires treatment to improve quality of life."
+            if (!order) {
+                return {
+                    success: false,
+                    message: "Order not found",
+                    error: "Order with the provided ID does not exist"
+                };
             }
-        ]
-    })
+
+            // Check if order already has a pharmacy order ID
+            if (order.pharmacyOrderId) {
+                return {
+                    success: false,
+                    message: "Order already approved",
+                    error: "This order has already been sent to the pharmacy"
+                };
+            }
+
+            // Get approving doctor and validate they are a doctor in the same clinic
+            const doctor = await getUser(userId);
+            if (!doctor) {
+                return {
+                    success: false,
+                    message: "Doctor not found",
+                    error: "Doctor with the provided ID does not exist"
+                };
+            }
+
+            if (doctor.role !== 'doctor') {
+                return {
+                    success: false,
+                    message: "Access denied",
+                    error: "Only doctors can approve orders"
+                };
+            }
+
+            // TODO validate that doctor is in the same clinic as order
+
+
+            // Check if order is already processed
+            if (order.status !== OrderStatus.PAID) {
+                return {
+                    success: false,
+                    message: "Order cannot be approved",
+                    error: `Order status is ${order.status}. Only paid orders can be approved.`
+                };
+            }
+
+
+
+            // Validate doctor has pharmacy physician ID
+            if (!doctor.pharmacyPhysicianId) {
+                return {
+                    success: false,
+                    message: "Doctor not configured for pharmacy",
+                    error: "Doctor must have a valid pharmacy physician ID to approve orders"
+                };
+            }
+
+            // Validate patient has pharmacy patient ID
+            if (!order.user.pharmacyPatientId) {
+                return {
+                    success: false,
+                    message: "Patient not configured for pharmacy",
+                    error: "Patient must have a valid pharmacy patient ID to process orders"
+                };
+            }
+
+
+
+            // Map order items to pharmacy products
+            const products = order.orderItems.map(item => ({
+                sku: parseInt(item.product.pharmacyProductId || '0'), // Use pharmacy product ID or default
+                quantity: item.quantity,
+                refills: 2, // Default refills - could be made configurable
+                days_supply: 30, // Default days supply - could be made configurable
+                sig: item.dosage || item.product.dosage || "Use as directed",
+                medical_necessity: item.notes || "Prescribed treatment as part of patient care plan."
+            }));
+
+            // Create pharmacy order
+            const pharmacyResult = await this.pharmacyOrderService.createOrder({
+                patient_id: parseInt(order.user.pharmacyPatientId),
+                physician_id: parseInt(doctor.pharmacyPhysicianId),
+                ship_to_clinic: 0, // Ship to patient
+                service_type: "two_day",
+                signature_required: 1,
+                memo: order.notes || "Order approved by doctor",
+                external_id: order.orderNumber,
+                test_order: process.env.NODE_ENV === 'production' ? 0 : 1,
+                products: products
+            });
+
+            if (!pharmacyResult.success) {
+                return {
+                    success: false,
+                    message: "Failed to create pharmacy order",
+                    error: pharmacyResult.error || "Unknown pharmacy error"
+                };
+            }
+
+            // Update order with pharmacy order ID and status
+            await order.update({
+                pharmacyOrderId: pharmacyResult.data?.number?.toString() || pharmacyResult.data?.id?.toString(),
+                status: OrderStatus.PROCESSING
+            });
+
+            return {
+                success: true,
+                message: "Order successfully approved and sent to pharmacy",
+            };
+
+        } catch (error) {
+            console.error('Error approving order:', error);
+            return {
+                success: false,
+                message: "Failed to approve order",
+                error: error instanceof Error ? error.message : 'Unknown error occurred'
+            };
+        }
+    }
 }
 
-export default OrderServiceClass;
+
+
+export default OrderService;
 export { ListOrdersByClinicResult, PaginationParams };

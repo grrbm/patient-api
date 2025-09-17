@@ -3,10 +3,15 @@ import User from "../../models/User";
 import Treatment from "../../models/Treatment";
 
 export const getOrder = async (orderId: string) => {
-    return await Order.findOne({
+    return Order.findOne({
         where: {
             id: orderId,
         },
+        include: [{
+            model: Treatment,
+            as: 'treatment',
+            attributes: ['id', 'name', 'clinicId', 'orderItems']
+        }]
     });
 }
 
