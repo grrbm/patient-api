@@ -85,7 +85,7 @@ module.exports = {
     );
 
     // Step 6: Gender options
-    addOptionsForQuestion('What\'s your gender at birth?', [
+    addOptionsForQuestion("What's your gender at birth?", [
       { text: 'Male' },
       { text: 'Female' }
     ]);
@@ -110,7 +110,7 @@ module.exports = {
       { text: 'Prediabetes' },
       { text: 'Type 2 diabetes' },
       { text: 'Gastroparesis' },
-      { text: 'IBD (Crohn\'s or Colitis)' }
+      { text: "IBD (Crohn's or Colitis)" }
     ]);
 
     // Step 14: Medical conditions (second set) options
@@ -143,7 +143,7 @@ module.exports = {
 
     // Step 16: Current medications options
     addOptionsForQuestion('Are you currently taking any medications?', [
-      { text: 'No, I don\'t take any medications' },
+      { text: "No, I don't take any medications" },
       { text: 'Yes, I take medications' }
     ]);
 
@@ -163,7 +163,7 @@ module.exports = {
 
     // Step 18: Weight loss medication history options
     addOptionsForQuestion('Have you taken weight loss medications before?', [
-      { text: 'No, I haven\'t taken weight loss medications' },
+      { text: "No, I haven't taken weight loss medications" },
       { text: 'Yes, I have taken weight loss medications before.' }
     ]);
 
