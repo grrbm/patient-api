@@ -2,6 +2,8 @@ import Product from '../models/Product';
 import User from '../models/User';
 import TreatmentProducts from '../models/TreatmentProducts';
 import { getTreatment } from './db/treatment';
+import Treatment from '../models/Treatment';
+import StripeService from './stripe';
 
 interface TreatmentProductData {
     productId: string;
@@ -36,6 +38,11 @@ interface UpdateTreatmentResult {
 const MARKUP = 10;
 
 class TreatmentService {
+    private stripeService: StripeService;
+
+    constructor() {
+        this.stripeService = new StripeService();
+    }
     async associateProductsWithTreatment(
         treatmentId: string,
         products: TreatmentProductData[],
@@ -231,6 +238,9 @@ class TreatmentService {
                 await treatment.update(updateFields);
             }
 
+            // Handle Stripe product and price creation/update
+            await this.ensureStripeProductAndPrice(treatment);
+
             // Update products if provided
             if (updateData.products !== undefined) {
                 const associationResult = await this.associateProductsWithTreatment(
@@ -270,6 +280,88 @@ class TreatmentService {
                 message: "Failed to update treatment",
                 error: error instanceof Error ? error.message : 'Unknown error occurred'
             };
+        }
+    }
+
+    private async ensureStripeProductAndPrice(treatment: Treatment): Promise<void> {
+        try {
+            let stripeProductId = treatment.stripeProductId;
+            let stripePriceId = treatment.stripePriceId;
+
+            // Create Stripe product if it doesn't exist
+            if (!stripeProductId) {
+                const stripeProduct = await this.stripeService.createProduct({
+                    name: treatment.name,
+                    description: `Treatment: ${treatment.name}`,
+                    metadata: {
+                        treatmentId: treatment.id,
+                        clinicId: treatment.clinicId
+                    }
+                });
+                stripeProductId = stripeProduct.id;
+
+                // Update treatment with Stripe product ID
+                await treatment.update({ stripeProductId });
+            }
+
+            // Handle Stripe price creation and updates
+            if (treatment.price > 0) {
+                let createNewPrice = !stripePriceId;
+                let shouldDeprecateOldPrice = false;
+
+                if (stripePriceId) {
+                    try {
+                        const existingPrice = await this.stripeService.getPrice(stripePriceId);
+                        // Convert price to cents for comparison
+                        const priceInCents = Math.round(treatment.price * 100);
+
+                        if (existingPrice.unit_amount !== priceInCents) {
+                            createNewPrice = true;
+                            shouldDeprecateOldPrice = true;
+                        }
+                    } catch (error) {
+                        // If price doesn't exist, create new one
+                        createNewPrice = true;
+                        shouldDeprecateOldPrice = false; // Can't deprecate what doesn't exist
+                    }
+                }
+
+                if (createNewPrice) {
+                    // Deprecate old price first if it exists and is different
+                    if (shouldDeprecateOldPrice && stripePriceId) {
+                        try {
+                            await this.stripeService.deprecatePrice(stripePriceId);
+                            console.log(`Deprecated old Stripe price: ${stripePriceId}`);
+                        } catch (error) {
+                            console.error('Error deprecating old Stripe price:', error);
+                        }
+                    }
+
+                    // Create new price
+                    const stripePrice = await this.stripeService.createPrice({
+                        unit_amount: Math.round(treatment.price * 100), // Convert to cents
+                        currency: 'usd',
+                        product: stripeProductId,
+                        recurring: {
+                            interval: 'month',
+                        },
+                        metadata: {
+                            treatmentId: treatment.id,
+                            clinicId: treatment.clinicId,
+                            created_at: new Date().toISOString()
+                        }
+                    });
+                    stripePriceId = stripePrice.id;
+
+                    // Update treatment with new Stripe price ID
+                    await treatment.update({ stripePriceId });
+                    console.log(`Created new Stripe price: ${stripePriceId} for treatment: ${treatment.id}`);
+                }
+            }
+
+        } catch (error) {
+            console.error('Error ensuring Stripe product and price:', error);
+            // Don't throw error to avoid breaking the main update flow
         }
     }
 }

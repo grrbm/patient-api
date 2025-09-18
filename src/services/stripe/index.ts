@@ -61,35 +61,7 @@ class StripeService {
     });
   }
 
-  async createProductWithPrice(
-    name: string,
-    unitAmount: number,
-    currency: string = 'usd',
-    interval: 'month' | 'year' = 'month',
-    description?: string
-  ) {
-    // Create the product first
-    const product = await stripe.products.create({
-      name,
-      description,
-      type: 'service'
-    });
 
-    // Create the price associated with the product
-    const price = await stripe.prices.create({
-      unit_amount: Math.round(unitAmount * 100), // Convert to cents
-      currency,
-      recurring: {
-        interval
-      },
-      product: product.id
-    });
-
-    return {
-      product,
-      price
-    };
-  }
 
   async createPaymentIntent(
     amount: number,
@@ -105,6 +77,36 @@ class StripeService {
         enabled: true,
       },
     });
+  }
+
+  // Product management methods
+  async createProduct(params: Stripe.ProductCreateParams) {
+    return stripe.products.create(params);
+  }
+
+  async getProduct(productId: string) {
+    return stripe.products.retrieve(productId);
+  }
+
+  async updateProduct(productId: string, params: Stripe.ProductUpdateParams) {
+    return stripe.products.update(productId, params);
+  }
+
+  // Price management methods
+  async createPrice(params: Stripe.PriceCreateParams) {
+    return stripe.prices.create(params);
+  }
+
+  async getPrice(priceId: string) {
+    return stripe.prices.retrieve(priceId);
+  }
+
+  async updatePrice(priceId: string, params: Stripe.PriceUpdateParams) {
+    return stripe.prices.update(priceId, params);
+  }
+
+  async deprecatePrice(priceId: string) {
+    return stripe.prices.update(priceId, { active: false });
   }
 
 }
