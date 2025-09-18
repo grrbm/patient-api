@@ -61,6 +61,11 @@ class StripeService {
     });
   }
 
+  async getSubscription(subscriptionId: string) {
+    return stripe.subscriptions.retrieve(subscriptionId);
+  }
+
+
 
 
   async createPaymentIntent(

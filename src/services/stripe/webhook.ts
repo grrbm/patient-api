@@ -120,6 +120,58 @@ export const handleInvoicePaid = async (invoice: Stripe.Invoice): Promise<void> 
             console.log('✅ Subscription order updated to paid:', order.orderNumber);
         }
     }
+};
+
+export const handleInvoicePaymentFailed = async (invoice: Stripe.Invoice): Promise<void> => {
+    console.log('❌ Invoice payment failed:', invoice.id);
+
+
+
+    // Get subscription ID directly from the invoice
+    const subItem = invoice?.lines?.data[0]
+
+    const subscriptionId = subItem?.parent?.subscription_item_details?.subscription
+
+    const stripeService = new StripeService();
+
+    if (subscriptionId) {
+        const order = await Order.findOne({
+            where: {
+                stripeSubscriptionId: subscriptionId
+            }
+        });
+
+        if (order) {
+            // const subscriptionResponse = await stripeService.getSubscription(subscriptionId);
+            // Calculate the due date based on subscription's current period end
+            // This gives the customer until the end of their current billing period
+            // const validUntil = new Date(subscriptionResponse.current_period_end * 1000);
+
+            await order.markOrderAsPaymentDue(new Date);
+            console.log('⚠️ Subscription order marked as payment due until:', new Date().toISOString(), 'for order:', order.orderNumber);
+        } else {
+            console.warn('⚠️ No order found for failed subscription payment:', subscriptionId);
+        }
+    } else {
+        console.warn('⚠️ No subscription ID found in failed invoice:', invoice.id);
+    }
+};
+
+export const handleSubscriptionDeleted = async (subscription: Stripe.Subscription): Promise<void> => {
+    console.log('Subscription Cancel:', subscription.id);
+
+    const { id: subscriptionId } = subscription;
+
+
+    const order = await Order.findOne({
+        where: {
+            stripeSubscriptionId: subscriptionId
+        }
+    });
+    if (order) {
+        await order.markOrderAsCanceled();
+        console.log('✅ Subscription order updated to paid:', order.orderNumber);
+    }
 
 
 };
@@ -150,6 +202,14 @@ export const processStripeWebhook = async (event: Stripe.Event): Promise<void> =
         case 'invoice.paid':
             await handleInvoicePaid(event.data.object as Stripe.Invoice);
             break;
+        case "invoice.payment_failed":
+            await handleInvoicePaymentFailed(event.data.object as Stripe.Invoice)
+            break;
+
+        case "customer.subscription.deleted":
+            await handleSubscriptionDeleted(event.data.object as Stripe.Subscription)
+            break;
+
 
         default:
             console.log(`🔍 Unhandled event type ${event.type}`);
