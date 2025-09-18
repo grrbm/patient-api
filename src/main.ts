@@ -1442,6 +1442,10 @@ app.get("/orders/:id", authenticateJWT, async (req, res) => {
         {
           model: Treatment,
           as: 'treatment'
+        },
+        {
+          model: ShippingOrder,
+          as: 'shippingOrders'
         }
       ]
     });
