@@ -147,7 +147,15 @@ app.use(cors({
 }));
 
 app.use(helmet());
-app.use(express.json()); // Parse JSON bodies
+
+// Conditional JSON parsing - exclude webhook paths that need raw body
+app.use((req, res, next) => {
+  if (req.path === '/webhook/stripe') {
+    next(); // Skip JSON parsing for Stripe webhook
+  } else {
+    express.json()(req, res, next); // Apply JSON parsing for all other routes
+  }
+});
 
 // No session middleware needed for JWT
 
