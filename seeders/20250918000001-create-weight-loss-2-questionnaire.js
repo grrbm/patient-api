@@ -265,7 +265,7 @@ module.exports = {
     questions.push({
       id: require('uuid').v4(),
       questionText: 'What is your main goal with weight loss medication?',
-      answerType: 'single_choice',
+      answerType: 'radio',
       isRequired: true,
       questionOrder: 1,
       stepId: step1Id,
@@ -278,7 +278,7 @@ module.exports = {
     questions.push({
       id: require('uuid').v4(),
       questionText: 'Have you tried losing weight before?',
-      answerType: 'single_choice',
+      answerType: 'radio',
       isRequired: true,
       questionOrder: 1,
       stepId: step2Id,
@@ -291,7 +291,7 @@ module.exports = {
     questions.push({
       id: require('uuid').v4(),
       questionText: 'What is the main difficulty you face when trying to lose weight?',
-      answerType: 'single_choice',
+      answerType: 'radio',
       isRequired: true,
       questionOrder: 1,
       stepId: step3Id,
@@ -306,7 +306,7 @@ module.exports = {
     questions.push({
       id: require('uuid').v4(),
       questionText: 'What state do you live in?',
-      answerType: 'single_choice',
+      answerType: 'select',
       isRequired: true,
       questionOrder: 1,
       stepId: step5Id,
@@ -319,7 +319,7 @@ module.exports = {
     questions.push({
       id: require('uuid').v4(),
       questionText: 'What\'s your gender at birth?',
-      answerType: 'single_choice',
+      answerType: 'radio',
       isRequired: true,
       questionOrder: 1,
       stepId: step6Id,
@@ -441,7 +441,7 @@ module.exports = {
     questions.push({
       id: require('uuid').v4(),
       questionText: 'Do you have any of these medical conditions?',
-      answerType: 'multiple_choice',
+      answerType: 'checkbox',
       isRequired: true,
       questionOrder: 1,
       stepId: step13Id,
@@ -454,7 +454,7 @@ module.exports = {
     questions.push({
       id: require('uuid').v4(),
       questionText: 'Do you have any of these serious medical conditions?',
-      answerType: 'multiple_choice',
+      answerType: 'checkbox',
       isRequired: true,
       questionOrder: 1,
       stepId: step14Id,
@@ -467,7 +467,7 @@ module.exports = {
     questions.push({
       id: require('uuid').v4(),
       questionText: 'Are you allergic to any of the following?',
-      answerType: 'multiple_choice',
+      answerType: 'checkbox',
       isRequired: true,
       questionOrder: 1,
       stepId: step15Id,
@@ -480,7 +480,7 @@ module.exports = {
     questions.push({
       id: require('uuid').v4(),
       questionText: 'Are you currently taking any medications?',
-      answerType: 'single_choice',
+      answerType: 'radio',
       isRequired: true,
       questionOrder: 1,
       stepId: step16Id,
@@ -492,7 +492,7 @@ module.exports = {
     questions.push({
       id: require('uuid').v4(),
       questionText: 'Please list all medications, vitamins, and supplements',
-      answerType: 'long_text',
+      answerType: 'textarea',
       isRequired: false,
       questionOrder: 2,
       stepId: step16Id,
@@ -505,7 +505,7 @@ module.exports = {
     questions.push({
       id: require('uuid').v4(),
       questionText: 'Are you currently taking any of the following medications?',
-      answerType: 'multiple_choice',
+      answerType: 'checkbox',
       isRequired: true,
       questionOrder: 1,
       stepId: step17Id,
@@ -518,7 +518,7 @@ module.exports = {
     questions.push({
       id: require('uuid').v4(),
       questionText: 'Have you taken weight loss medications before?',
-      answerType: 'single_choice',
+      answerType: 'radio',
       isRequired: true,
       questionOrder: 1,
       stepId: step18Id,
@@ -529,7 +529,7 @@ module.exports = {
     questions.push({
       id: require('uuid').v4(),
       questionText: 'Which medication WERE YOU LAST ON?',
-      answerType: 'single_choice',
+      answerType: 'radio',
       isRequired: false,
       questionOrder: 2,
       stepId: step18Id,
