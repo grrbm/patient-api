@@ -61,6 +61,16 @@ export default class OrderItem extends Entity {
   })
   declare notes?: string;
 
+  @Column({
+    type: DataType.STRING,
+    allowNull: true,
+})
+declare pharmacyProductId: string;
+// TODO: review and Add these fields here
+  //   refills
+  // days_supply
+  // sig
+
   // Calculate total price based on quantity and unit price
   public calculateTotalPrice(): number {
     return this.quantity * this.unitPrice;

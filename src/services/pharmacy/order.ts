@@ -67,25 +67,25 @@ class OrderService {
 
   async createOrder(orderData: CreateOrderRequest): Promise<PharmacyApiResponse> {
     try {
-      // const response: AxiosResponse = await axios.post(
-      //   `${this.config.baseUrl}/api/clinics/orders`,
-      //   {
-      //     ...orderData,
-      //     clinicId: this.config.clinicId
-      //   },
-      //   {
-      //     params: {
-      //       api_key: this.config.apiKey
-      //     },
-      //     headers: {
-      //       'Content-Type': 'application/json',
-      //     }
-      //   }
-      // );
+      const response: AxiosResponse = await axios.post(
+        `${this.config.baseUrl}/api/clinics/orders`,
+        {
+          ...orderData,
+          clinicId: this.config.clinicId
+        },
+        {
+          params: {
+            api_key: this.config.apiKey
+          },
+          headers: {
+            'Content-Type': 'application/json',
+          }
+        }
+      );
 
       return {
         success: true,
-        data: demoOrder
+        data: response.data
       };
     } catch (error) {
       console.error('Error creating pharmacy order:', error);

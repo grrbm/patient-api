@@ -166,7 +166,7 @@ class OrderService {
 
             // Map order items to pharmacy products
             const products = order.orderItems.map(item => ({
-                sku: parseInt(item.product.pharmacyProductId || '0'), // Use pharmacy product ID or default
+                sku: parseInt(item.pharmacyProductId), // Use pharmacy product ID or default
                 quantity: item.quantity,
                 refills: 2, // Default refills - could be made configurable
                 days_supply: 30, // Default days supply - could be made configurable
@@ -182,7 +182,7 @@ class OrderService {
                 service_type: "two_day",
                 signature_required: 1,
                 memo: order.notes || "Order approved",
-                external_id: order.orderNumber,
+                external_id: order.id,
                 test_order: process.env.NODE_ENV === 'production' ? 0 : 1,
                 products: products
             });

@@ -1,6 +1,9 @@
 import User from '../models/User';
 import Treatment from '../models/Treatment';
 import Order, { OrderStatus, BillingPlan } from '../models/Order';
+import OrderItem from '../models/OrderItem';
+import Product from '../models/Product';
+import TreatmentProducts from '../models/TreatmentProducts';
 import StripeService from './stripe';
 
 interface SubscribeTreatmentResult {
@@ -36,8 +39,21 @@ class PaymentService {
                 };
             }
 
-            // Get treatment and validate
-            const treatment = await Treatment.findByPk(treatmentId);
+            // Get treatment with products and validate
+            const treatment = await Treatment.findByPk(treatmentId, {
+                include: [
+                    {
+                        model: TreatmentProducts,
+                        as: 'treatmentProducts',
+                        include: [
+                            {
+                                model: Product,
+                                as: 'product'
+                            }
+                        ]
+                    }
+                ]
+            });
             if (!treatment) {
                 return {
                     success: false,
@@ -81,6 +97,25 @@ class PaymentService {
                 subtotalAmount: totalAmount,
                 totalAmount: totalAmount
             });
+
+            // Create order items from treatment products
+            if (treatment.treatmentProducts && treatment.treatmentProducts.length > 0) {
+                const orderItems = [];
+                for (const treatmentProduct of treatment.treatmentProducts) {
+                    const product = treatmentProduct.product;
+                    const orderItem = await OrderItem.create({
+                        orderId: order.id,
+                        productId: product.id,
+                        quantity: 1, // Default quantity for subscription
+                        unitPrice: product.price || 0,
+                        totalPrice: product.price || 0,
+                        pharmacyProductId: product.pharmacyProductId,
+                        dosage: treatmentProduct.dosage || product.dosage || "Use as directed"
+                    });
+                    orderItems.push(orderItem);
+                }
+                console.log(`✅ Created ${orderItems.length} order items for treatment subscription`);
+            }
 
             // Create Stripe checkout session
             const checkoutSession = await this.stripeService.checkoutSub({
