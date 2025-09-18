@@ -15,15 +15,22 @@ module.exports = {
     }
     
     const questionnaireId = questionnaires[0].questionnaire_id;
+    console.log('Found questionnaire ID:', questionnaireId);
 
     // Get all questions for this questionnaire
-    const [questions] = await queryInterface.sequelize.query(`
-      SELECT q.id, q."questionText", qs."stepOrder"
-      FROM "Question" q
-      JOIN "QuestionnaireStep" qs ON q."stepId" = qs.id
-      WHERE qs."questionnaireId" = '${questionnaireId}'
-      ORDER BY qs."stepOrder", q."questionOrder"
-    `);
+    const questions = await queryInterface.sequelize.query(
+      `SELECT q.id, q."questionText", qs."stepOrder"
+       FROM "Question" q
+       JOIN "QuestionnaireStep" qs ON q."stepId" = qs.id
+       WHERE qs."questionnaireId" = ?
+       ORDER BY qs."stepOrder", q."questionOrder"`,
+      {
+        replacements: [questionnaireId],
+        type: queryInterface.sequelize.QueryTypes.SELECT
+      }
+    );
+
+    console.log('Found questions:', questions.length);
 
     const questionOptions = [];
 
@@ -181,15 +188,19 @@ module.exports = {
 
   async down(queryInterface, Sequelize) {
     // Delete all question options for this questionnaire
-    await queryInterface.sequelize.query(`
-      DELETE FROM "QuestionOption" 
-      WHERE "questionId" IN (
-        SELECT q.id FROM "Question" q
-        JOIN "QuestionnaireStep" qs ON q."stepId" = qs.id
-        JOIN "Questionnaire" quest ON qs."questionnaireId" = quest.id
-        JOIN "Treatment" t ON quest."treatmentId" = t.id
-        WHERE t.name = 'Weight Loss 2'
-      )
-    `);
+    await queryInterface.sequelize.query(
+      `DELETE FROM "QuestionOption" 
+       WHERE "questionId" IN (
+         SELECT q.id FROM "Question" q
+         JOIN "QuestionnaireStep" qs ON q."stepId" = qs.id
+         JOIN "Questionnaire" quest ON qs."questionnaireId" = quest.id
+         JOIN "Treatment" t ON quest."treatmentId" = t.id
+         WHERE t.name = ?
+       )`,
+      {
+        replacements: ['Weight Loss 2'],
+        type: queryInterface.sequelize.QueryTypes.DELETE
+      }
+    );
   }
 };
