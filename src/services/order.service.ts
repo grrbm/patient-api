@@ -6,6 +6,7 @@ import User from '../models/User';
 import OrderItem from '../models/OrderItem';
 import Product from '../models/Product';
 import { OrderStatus } from '../models/Order';
+import ShippingOrder, { OrderShippingStatus } from '../models/ShippingOrder';
 
 
 interface ListOrdersByClinicResult {
@@ -26,6 +27,12 @@ interface ListOrdersByClinicResult {
 interface PaginationParams {
     page?: number;
     limit?: number;
+}
+
+const PHARMACY_PHYSICIAN_ID = process.env.PHARMACY_PHYSICIAN_ID!
+
+if (!PHARMACY_PHYSICIAN_ID) {
+    throw Error("Missing PHARMACY_PHYSICIAN_ID")
 }
 
 class OrderService {
@@ -102,7 +109,7 @@ class OrderService {
             };
         }
     }
-    async approveOrder(orderId: string, userId: string) {
+    async approveOrder(orderId: string) {
         try {
             // Get order with all related data
             const order = await Order.findOne({
@@ -111,7 +118,7 @@ class OrderService {
                     {
                         model: User,
                         as: 'user',
-                        attributes: ['id', 'firstName', 'lastName', 'email', 'pharmacyPatientId', 'clinicId']
+                        attributes: ['id', 'firstName', 'lastName', 'email', 'pharmacyPatientId', 'clinicId', 'address', 'city', 'state', 'zipCode']
                     },
                     {
                         model: OrderItem,
@@ -135,35 +142,6 @@ class OrderService {
                 };
             }
 
-            // Check if order already has a pharmacy order ID
-            if (order.pharmacyOrderId) {
-                return {
-                    success: false,
-                    message: "Order already approved",
-                    error: "This order has already been sent to the pharmacy"
-                };
-            }
-
-            // Get approving doctor and validate they are a doctor in the same clinic
-            const doctor = await getUser(userId);
-            if (!doctor) {
-                return {
-                    success: false,
-                    message: "Doctor not found",
-                    error: "Doctor with the provided ID does not exist"
-                };
-            }
-
-            if (doctor.role !== 'doctor') {
-                return {
-                    success: false,
-                    message: "Access denied",
-                    error: "Only doctors can approve orders"
-                };
-            }
-
-            // TODO validate that doctor is in the same clinic as order
-
 
             // Check if order is already processed
             if (order.status !== OrderStatus.PAID) {
@@ -174,16 +152,6 @@ class OrderService {
                 };
             }
 
-
-
-            // Validate doctor has pharmacy physician ID
-            if (!doctor.pharmacyPhysicianId) {
-                return {
-                    success: false,
-                    message: "Doctor not configured for pharmacy",
-                    error: "Doctor must have a valid pharmacy physician ID to approve orders"
-                };
-            }
 
             // Validate patient has pharmacy patient ID
             if (!order.user.pharmacyPatientId) {
@@ -209,11 +177,11 @@ class OrderService {
             // Create pharmacy order
             const pharmacyResult = await this.pharmacyOrderService.createOrder({
                 patient_id: parseInt(order.user.pharmacyPatientId),
-                physician_id: parseInt(doctor.pharmacyPhysicianId),
+                physician_id: parseInt(PHARMACY_PHYSICIAN_ID),
                 ship_to_clinic: 0, // Ship to patient
                 service_type: "two_day",
                 signature_required: 1,
-                memo: order.notes || "Order approved by doctor",
+                memo: order.notes || "Order approved",
                 external_id: order.orderNumber,
                 test_order: process.env.NODE_ENV === 'production' ? 0 : 1,
                 products: products
@@ -227,10 +195,21 @@ class OrderService {
                 };
             }
 
-            // Update order with pharmacy order ID and status
-            await order.update({
-                pharmacyOrderId: pharmacyResult.data?.number?.toString() || pharmacyResult.data?.id?.toString(),
-                status: OrderStatus.PROCESSING
+            const pharmacyOrderId = pharmacyResult.data?.id?.toString();
+
+            // Create shipping address from user information
+            const shippingAddress = [
+                order.user.address,
+                order.user.city && order.user.state ? `${order.user.city}, ${order.user.state}` : null,
+                order.user.zipCode
+            ].filter(Boolean).join(', ') || 'No address provided';
+
+            // Create shipping order
+            await ShippingOrder.create({
+                orderId: order.id,
+                status: OrderShippingStatus.PROCESSING,
+                address: shippingAddress,
+                pharmacyOrderId: pharmacyOrderId
             });
 
             return {

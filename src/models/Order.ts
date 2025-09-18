@@ -6,6 +6,7 @@ import Questionnaire from './Questionnaire';
 import OrderItem from './OrderItem';
 import Payment from './Payment';
 import ShippingAddress from './ShippingAddress';
+import ShippingOrder from './ShippingOrder';
 
 export enum OrderStatus {
   PENDING = 'pending',
@@ -18,13 +19,6 @@ export enum OrderStatus {
   REFUNDED = 'refunded'
 }
 
-export enum OrderShippingStatus {
-  PENDING = 'pending',
-  PROCESSING = 'processing',
-  SHIPPED = 'shipped',
-  DELIVERED = 'delivered',
-  CANCELLED = 'cancelled',
-}
 
 export enum BillingPlan {
   MONTHLY = 'monthly',
@@ -148,12 +142,6 @@ export default class Order extends Entity {
     type: DataType.STRING,
     allowNull: true,
   })
-  declare pharmacyOrderId?: string;
-
-  @Column({
-    type: DataType.STRING,
-    allowNull: true,
-  })
   declare stripeSubscriptionId?: string;
 
   @Column({
@@ -161,6 +149,8 @@ export default class Order extends Entity {
     allowNull: true,
   })
   declare paidAt?: Date;
+
+
 
   @HasMany(() => OrderItem)
   declare orderItems: OrderItem[];
@@ -170,6 +160,9 @@ export default class Order extends Entity {
 
   @HasOne(() => ShippingAddress)
   declare shippingAddress: ShippingAddress;
+
+  @HasMany(() => ShippingOrder)
+  declare shippingOrders: ShippingOrder[];
 
   // Static method to generate order number
   public static generateOrderNumber(): string {

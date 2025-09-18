@@ -84,6 +84,12 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2025-08-27.basil',
 });
 
+// Validate APP_WEBHOOK_SECRET
+if (!process.env.APP_WEBHOOK_SECRET) {
+  console.error('❌ APP_WEBHOOK_SECRET environment variable is not set');
+  process.exit(1);
+}
+
 // Configure multer for file uploads (store in memory)
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -1617,21 +1623,30 @@ app.get("/orders/by-clinic/:clinicId", authenticateJWT, async (req, res) => {
   }
 });
 
-app.post("/orders/approve", authenticateJWT, async (req, res) => {
+app.post("/webhook/orders", async (req, res) => {
   try {
+    // Validate webhook secret
+    const providedSecret = req.headers['authorization'];
 
-    const { orderId } = req.body;
-
-    const currentUser = getCurrentUser(req);
-
-    if (!currentUser) {
+    if (!providedSecret) {
       return res.status(401).json({
         success: false,
-        message: "Not authenticated"
+        message: "Webhook secret required"
       });
     }
 
-    const result = await orderService.approveOrder(orderId, currentUser.id);
+
+    if (providedSecret !== process.env.APP_WEBHOOK_SECRET) {
+      return res.status(403).json({
+        success: false,
+        message: "Invalid webhook secret"
+      });
+    }
+
+    const { orderId } = req.body;
+
+
+    const result = await orderService.approveOrder(orderId);
 
     res.json(result);
   } catch (error) {
