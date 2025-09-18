@@ -25,6 +25,7 @@ import TreatmentService from "./services/treatment.service";
 import PaymentService from "./services/payment.service";
 import { processStripeWebhook } from "./services/stripe/webhook";
 import TreatmentProducts from "./models/TreatmentProducts";
+import ShippingOrder from "./models/ShippingOrder";
 
 // Helper function to generate unique clinic slug
 async function generateUniqueSlug(clinicName: string, excludeId?: string): Promise<string> {
@@ -1560,32 +1561,6 @@ app.put("/patient", authenticateJWT, async (req, res) => {
   }
 });
 
-app.put("/doctor", authenticateJWT, async (req, res) => {
-  try {
-    const currentUser = getCurrentUser(req);
-
-    if (!currentUser) {
-      return res.status(401).json({
-        success: false,
-        message: "Not authenticated"
-      });
-    }
-
-    const result = await userService.updateUserDoctor(currentUser.id, req.body);
-
-    if (result.success) {
-      res.status(200).json(result);
-    } else {
-      res.status(400).json(result.error);
-    }
-  } catch (error) {
-    console.error('❌ Error updating patient:', error);
-    res.status(500).json({
-      success: false,
-      message: "Internal server error"
-    });
-  }
-});
 
 // Order endpoints
 app.get("/orders/by-clinic/:clinicId", authenticateJWT, async (req, res) => {
