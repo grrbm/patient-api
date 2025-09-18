@@ -12,6 +12,7 @@ export enum OrderStatus {
   PENDING = 'pending',
   PAYMENT_PROCESSING = 'payment_processing',
   PAID = 'paid',
+  PAYMENT_DUE = 'payment_due',
   PROCESSING = 'processing',
   SHIPPED = 'shipped',
   DELIVERED = 'delivered',
@@ -139,6 +140,18 @@ export default class Order extends Entity {
   declare deliveredAt?: Date;
 
   @Column({
+    type: DataType.DATE,
+    allowNull: true,
+  })
+  declare cancelledAt?: Date;
+
+  @Column({
+    type: DataType.DATE,
+    allowNull: true,
+  })
+  declare paymentDue?: Date;
+
+  @Column({
     type: DataType.STRING,
     allowNull: true,
     unique: true,
@@ -201,9 +214,21 @@ export default class Order extends Entity {
     await this.save();
   }
 
-  public async updateOrderProcessing(stripeSubscriptionId:string): Promise<void> {
+  public async updateOrderProcessing(stripeSubscriptionId: string): Promise<void> {
     this.stripeSubscriptionId = stripeSubscriptionId;
     this.status = OrderStatus.PAYMENT_PROCESSING;
+    await this.save();
+  }
+
+  public async markOrderAsCanceled(): Promise<void> {
+    this.status = OrderStatus.CANCELLED;
+    this.cancelledAt = new Date()
+    await this.save();
+  }  
+  
+  public async markOrderAsPaymentDue(dueDate: Date): Promise<void> {
+    this.status = OrderStatus.PAYMENT_DUE;
+    this.paymentDue = dueDate
     await this.save();
   }
 }
