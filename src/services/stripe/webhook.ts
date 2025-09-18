@@ -86,12 +86,16 @@ export const handleCheckoutSessionCompleted = async (session: Stripe.Checkout.Se
 
     // Handle subscription checkout completion
     if (session.mode === 'subscription' && session.metadata) {
-        const { orderId, userId, treatmentId } = session.metadata;
+        const { orderId } = session.metadata;
+        const { subscription } = session;
 
-        if (orderId) {
+        console.log(" subscription ", subscription)
+
+
+        if (orderId && subscription) {
             const order = await Order.findByPk(orderId);
             if (order) {
-                await order.updateStatus(OrderStatus.PAYMENT_PROCESSING);
+                await order.updateOrderProcessing(subscription as string);
                 console.log('✅ Subscription order updated to payment processing:', order.orderNumber);
             }
         }
@@ -101,21 +105,21 @@ export const handleCheckoutSessionCompleted = async (session: Stripe.Checkout.Se
 export const handleInvoicePaid = async (invoice: Stripe.Invoice): Promise<void> => {
     console.log('Invoice paid:', invoice.id);
 
+    const subItem = invoice?.lines?.data[0]
 
-    console.log("Items ", invoice?.lines?.data?.length);
+    const subscriptionId = subItem?.parent?.subscription_item_details?.subscription
 
-    // TODO enable this when payment has been validated
-    // const orderId = invoice.lines.data[0].price!.metadata.orderId
-    // const subscriptionId = invoice.lines.data[0].price!.metadata.orderId
-
-
-    // if (orderId && subscriptionId) {
-    //     const order = await Order.findByPk(orderId);
-    //     if (order) {
-    //         await order.markOrderAsPaid(subscriptionId);
-    //         console.log('✅ Subscription order updated to payment processing:', order.orderNumber);
-    //     }
-    // }
+    if (subscriptionId) {
+        const order = await Order.findOne({
+            where: {
+                stripeSubscriptionId: subscriptionId
+            }
+        });
+        if (order) {
+            await order.markOrderAsPaid();
+            console.log('✅ Subscription order updated to paid:', order.orderNumber);
+        }
+    }
 
 
 };

@@ -141,6 +141,7 @@ export default class Order extends Entity {
   @Column({
     type: DataType.STRING,
     allowNull: true,
+    unique: true,
   })
   declare stripeSubscriptionId?: string;
 
@@ -194,13 +195,15 @@ export default class Order extends Entity {
     await this.save();
   }
 
-  public async markOrderAsPaid(stripeSubscriptionId:string): Promise<void> {
-    this.stripeSubscriptionId = stripeSubscriptionId;
+  public async markOrderAsPaid(): Promise<void> {
     this.status = OrderStatus.PAID;
     this.paidAt = new Date()
+    await this.save();
+  }
 
-    
-
+  public async updateOrderProcessing(stripeSubscriptionId:string): Promise<void> {
+    this.stripeSubscriptionId = stripeSubscriptionId;
+    this.status = OrderStatus.PAYMENT_PROCESSING;
     await this.save();
   }
 }
