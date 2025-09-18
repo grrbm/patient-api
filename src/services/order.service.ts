@@ -1,4 +1,4 @@
-import { listOrdersByClinic } from "./db/order";
+import { listOrdersByClinic, listOrdersByUser } from "./db/order";
 import { getUser } from "./db/user";
 import { OrderService as PharmacyOrderService } from "./pharmacy";
 import Order from '../models/Order';
@@ -14,6 +14,21 @@ interface ListOrdersByClinicResult {
     message: string;
     data?: {
         orders: any[];
+        pagination: {
+            page: number;
+            limit: number;
+            total: number;
+            totalPages: number;
+        };
+    };
+    error?: string;
+}
+
+interface ListOrdersByUserResult {
+    success: boolean;
+    message: string;
+    data?: {
+        orders: Order[];
         pagination: {
             page: number;
             limit: number;
@@ -109,7 +124,55 @@ class OrderService {
             };
         }
     }
+
+    async listOrdersByUser(
+        userId: string,
+        paginationParams: PaginationParams = {}
+    ): Promise<ListOrdersByUserResult> {
+        try {
+            // Get user and validate they exist
+            const user = await getUser(userId);
+            if (!user) {
+                return {
+                    success: false,
+                    message: "User not found",
+                    error: "User with the provided ID does not exist"
+                };
+            }
+
+            // Set default pagination values
+            const page = Math.max(1, paginationParams.page || 1);
+            const limit = Math.min(100, Math.max(1, paginationParams.limit || 10));
+
+            // Get orders by user with pagination
+            const result = await listOrdersByUser(userId, { page, limit });
+
+            return {
+                success: true,
+                message: `Successfully retrieved ${result.orders.length} orders`,
+                data: {
+                    orders: result.orders,
+                    pagination: {
+                        page,
+                        limit,
+                        total: result.total,
+                        totalPages: result.totalPages
+                    }
+                }
+            };
+
+        } catch (error) {
+            console.error('Error listing orders by user:', error);
+            return {
+                success: false,
+                message: "Failed to retrieve orders",
+                error: error instanceof Error ? error.message : 'Unknown error occurred'
+            };
+        }
+    }
+
     async approveOrder(orderId: string) {
+        // TODO: this method might need to be expanded to create Order items depending on the information approved in the prescription
         try {
             // Get order with all related data
             const order = await Order.findOne({
@@ -231,4 +294,4 @@ class OrderService {
 
 
 export default OrderService;
-export { ListOrdersByClinicResult, PaginationParams };
+export { ListOrdersByClinicResult, ListOrdersByUserResult, PaginationParams };
