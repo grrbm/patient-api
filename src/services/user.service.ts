@@ -102,7 +102,7 @@ class UserService {
             diseases: user.diseases!,
             medications: user.medications!,
             email: user.email,
-            phone_number: user.phoneNumber!,
+            phone_number: user.phoneNumber!.replace(/[^0-9]/g, ''), // Remove all special symbols, keep only digits
             address: address
         };
     }
