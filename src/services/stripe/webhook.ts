@@ -139,10 +139,15 @@ export const handleInvoicePaid = async (invoice: Stripe.Invoice): Promise<void> 
         if (sub) {
             await sub.markSubAsPaid();
             console.log('✅ Subscription updated to paid:', sub.id);
-            // TODO if order or clinic, mange the flow
 
             if (sub.orderId) {
                 //  If renewal create new oder
+                const order = await Order.findByPk(sub.orderId);
+                if (order) {
+                    await order.update({
+                        status: PaymentStatus.PAID
+                    })
+                }
             }
             if (sub.clinicId) {
                 const clinic = await Clinic.findByPk(sub.clinicId);
@@ -202,7 +207,6 @@ export const handleInvoicePaymentFailed = async (invoice: Stripe.Invoice): Promi
                     })
                 }
             }
-            // TODO if order or clinic, mange the flow
         } else {
             console.warn('⚠️ No order found for failed subscription payment:', subscriptionId);
         }
