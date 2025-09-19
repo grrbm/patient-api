@@ -1,6 +1,7 @@
 import { Table, Column, DataType, ForeignKey, BelongsTo } from 'sequelize-typescript';
 import Entity from './Entity';
 import Order from './Order';
+import ShippingAddress from './ShippingAddress';
 
 
 export enum OrderShippingStatus {
@@ -26,18 +27,22 @@ export default class ShippingOrder extends Entity {
   @BelongsTo(() => Order)
   declare order: Order;
 
+  @ForeignKey(() => ShippingAddress)
+  @Column({
+    type: DataType.UUID,
+    allowNull: false,
+  })
+  declare shippingAddressId: string;
+
+  @BelongsTo(() => ShippingAddress)
+  declare shippingAddress: ShippingAddress;
+
   @Column({
     type: DataType.ENUM(...Object.values(OrderShippingStatus)),
     allowNull: false,
     defaultValue: OrderShippingStatus.PENDING,
   })
   declare status: OrderShippingStatus;
-
-  @Column({
-    type: DataType.TEXT,
-    allowNull: false,
-  })
-  declare address: string;
 
   @Column({
     type: DataType.STRING,

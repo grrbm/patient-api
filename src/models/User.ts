@@ -1,9 +1,9 @@
-import { Table, Column, DataType, ForeignKey, BelongsTo } from 'sequelize-typescript';
+import { Table, Column, DataType, ForeignKey, BelongsTo, HasMany } from 'sequelize-typescript';
 import bcrypt from 'bcrypt';
 import Entity from './Entity';
 import Clinic from './Clinic';
+import ShippingAddress from './ShippingAddress';
 import { PatientAllergy, PatientDisease, PatientMedication } from '../services/pharmacy/patient';
-import { PhysicianLicense } from '../services/pharmacy/physician';
 
 @Table({
   freezeTableName: true,
@@ -158,6 +158,9 @@ export default class User extends Entity {
 
   @BelongsTo(() => Clinic)
   declare clinic?: Clinic;
+
+  @HasMany(() => ShippingAddress)
+  declare shippingAddresses: ShippingAddress[];
 
   // Instance methods
   public async validatePassword(password: string): Promise<boolean> {
