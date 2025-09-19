@@ -1654,7 +1654,9 @@ app.put("/patient", authenticateJWT, async (req, res) => {
       });
     }
 
-    const result = await userService.updateUserPatient(currentUser.id, req.body);
+    const { address, ...data } = req.body
+
+    const result = await userService.updateUserPatient(currentUser.id, data, address);
 
     if (result.success) {
       res.status(200).json(result);
