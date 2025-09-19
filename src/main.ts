@@ -1281,7 +1281,7 @@ app.post("/confirm-payment", authenticateJWT, async (req, res) => {
 // Create subscription for treatment
 app.post("/payments/treatment/sub", authenticateJWT, async (req, res) => {
   try {
-    const { treatmentId, billingPlan = 'monthly' } = req.body;
+    const { treatmentId, billingPlan = 'monthly', address } = req.body;
     const currentUser = getCurrentUser(req);
 
     if (!currentUser) {
@@ -1313,7 +1313,8 @@ app.post("/payments/treatment/sub", authenticateJWT, async (req, res) => {
     const result = await paymentService.subscribeTreatment(
       treatmentId,
       currentUser.id,
-      billingPlan
+      billingPlan,
+      address
     );
 
     if (result.success) {
@@ -1595,7 +1596,9 @@ app.put("/patient", authenticateJWT, async (req, res) => {
       });
     }
 
-    const result = await userService.updateUserPatient(currentUser.id, req.body);
+    const { address, ...data } = req.body
+
+    const result = await userService.updateUserPatient(currentUser.id, data, address);
 
     if (result.success) {
       res.status(200).json(result);
