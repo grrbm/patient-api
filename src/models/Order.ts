@@ -139,30 +139,6 @@ export default class Order extends Entity {
   })
   declare deliveredAt?: Date;
 
-  // @Column({
-  //   type: DataType.DATE,
-  //   allowNull: true,
-  // })
-  // declare cancelledAt?: Date;
-
-  // @Column({
-  //   type: DataType.DATE,
-  //   allowNull: true,
-  // })
-  // declare paymentDue?: Date;
-
-  // @Column({
-  //   type: DataType.STRING,
-  //   allowNull: true,
-  //   unique: true,
-  // })
-  // declare stripeSubscriptionId?: string;
-
-  // @Column({
-  //   type: DataType.DATE,
-  //   allowNull: true,
-  // })
-  // declare paidAt?: Date;
 
   @HasOne(() => Subscription)
   declare subscription?: Subscription;
@@ -171,10 +147,15 @@ export default class Order extends Entity {
   @HasMany(() => OrderItem)
   declare orderItems: OrderItem[];
 
-  // @HasOne(() => Payment)
-  // declare payment: Payment;
 
-  @HasOne(() => ShippingAddress)
+  @ForeignKey(() => ShippingAddress)
+  @Column({
+    type: DataType.UUID,
+    allowNull: false,
+  })
+  declare shippingAddressId: string;
+
+  @BelongsTo(() => ShippingAddress)
   declare shippingAddress: ShippingAddress;
 
   @HasMany(() => ShippingOrder)

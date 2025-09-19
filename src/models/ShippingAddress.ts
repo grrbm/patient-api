@@ -1,22 +1,22 @@
 import { Table, Column, DataType, ForeignKey, BelongsTo } from 'sequelize-typescript';
 import Entity from './Entity';
-import Order from './Order';
+import User from './User';
 
 @Table({
   freezeTableName: true,
   tableName: 'ShippingAddress',
 })
 export default class ShippingAddress extends Entity {
-  @ForeignKey(() => Order)
+  @ForeignKey(() => User)
   @Column({
     type: DataType.UUID,
     allowNull: false,
-    unique: true,
   })
-  declare orderId: string;
+  declare userId: string;
 
-  @BelongsTo(() => Order)
-  declare order: Order;
+  @BelongsTo(() => User)
+  declare user: User;
+
 
   @Column({
     type: DataType.STRING,
@@ -56,40 +56,13 @@ export default class ShippingAddress extends Entity {
   declare country: string;
 
   @Column({
-    type: DataType.STRING,
-    allowNull: true,
+    type: DataType.BOOLEAN,
+    allowNull: false,
+    defaultValue: false,
   })
-  declare trackingNumber?: string;
+  declare isDefault: boolean;
 
-  @Column({
-    type: DataType.STRING,
-    allowNull: true,
-  })
-  declare carrier?: string;
 
-  @Column({
-    type: DataType.DATE,
-    allowNull: true,
-  })
-  declare shippedAt?: Date;
-
-  @Column({
-    type: DataType.DATE,
-    allowNull: true,
-  })
-  declare estimatedDeliveryDate?: Date;
-
-  @Column({
-    type: DataType.DATE,
-    allowNull: true,
-  })
-  declare deliveredAt?: Date;
-
-  @Column({
-    type: DataType.TEXT,
-    allowNull: true,
-  })
-  declare deliveryNotes?: string;
 
   // Format full address as string
   public getFormattedAddress(): string {
@@ -106,23 +79,6 @@ export default class ShippingAddress extends Entity {
     }
     
     return formatted;
-  }
-
-  // Update shipping tracking information
-  public async updateTracking(trackingNumber: string, carrier: string): Promise<void> {
-    this.trackingNumber = trackingNumber;
-    this.carrier = carrier;
-    this.shippedAt = new Date();
-    await this.save();
-  }
-
-  // Mark as delivered
-  public async markAsDelivered(deliveryNotes?: string): Promise<void> {
-    this.deliveredAt = new Date();
-    if (deliveryNotes) {
-      this.deliveryNotes = deliveryNotes;
-    }
-    await this.save();
   }
 
   // Validate US address format
