@@ -13,17 +13,17 @@ export default class TreatmentProducts extends Entity {
     })
     declare dosage: string;
 
-    @Column({
-        type: DataType.INTEGER,
-        allowNull: false,
-    })
-    declare numberOfDoses: number;
+    // @Column({
+    //     type: DataType.INTEGER,
+    //     allowNull: false,
+    // })
+    // declare numberOfDoses: number;
 
-    @Column({
-        type: DataType.DATE,
-        allowNull: false,
-    })
-    declare nextDose: Date;
+    // @Column({
+    //     type: DataType.DATE,
+    //     allowNull: false,
+    // })
+    // declare nextDose: Date;
 
     @ForeignKey(() => Product)
     @Column({

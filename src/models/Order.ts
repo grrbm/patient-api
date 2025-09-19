@@ -4,19 +4,22 @@ import User from './User';
 import Treatment from './Treatment';
 import Questionnaire from './Questionnaire';
 import OrderItem from './OrderItem';
-import Payment from './Payment';
 import ShippingAddress from './ShippingAddress';
+import ShippingOrder from './ShippingOrder';
+import Subscription from './Subscription';
 
 export enum OrderStatus {
   PENDING = 'pending',
   PAYMENT_PROCESSING = 'payment_processing',
   PAID = 'paid',
+  PAYMENT_DUE = 'payment_due',
   PROCESSING = 'processing',
   SHIPPED = 'shipped',
   DELIVERED = 'delivered',
   CANCELLED = 'cancelled',
   REFUNDED = 'refunded'
 }
+
 
 export enum BillingPlan {
   MONTHLY = 'monthly',
@@ -136,14 +139,46 @@ export default class Order extends Entity {
   })
   declare deliveredAt?: Date;
 
+  // @Column({
+  //   type: DataType.DATE,
+  //   allowNull: true,
+  // })
+  // declare cancelledAt?: Date;
+
+  // @Column({
+  //   type: DataType.DATE,
+  //   allowNull: true,
+  // })
+  // declare paymentDue?: Date;
+
+  // @Column({
+  //   type: DataType.STRING,
+  //   allowNull: true,
+  //   unique: true,
+  // })
+  // declare stripeSubscriptionId?: string;
+
+  // @Column({
+  //   type: DataType.DATE,
+  //   allowNull: true,
+  // })
+  // declare paidAt?: Date;
+
+  @HasOne(() => Subscription)
+  declare subscription?: Subscription;
+
+
   @HasMany(() => OrderItem)
   declare orderItems: OrderItem[];
 
-  @HasOne(() => Payment)
-  declare payment: Payment;
+  // @HasOne(() => Payment)
+  // declare payment: Payment;
 
   @HasOne(() => ShippingAddress)
   declare shippingAddress: ShippingAddress;
+
+  @HasMany(() => ShippingOrder)
+  declare shippingOrders: ShippingOrder[];
 
   // Static method to generate order number
   public static generateOrderNumber(): string {
@@ -158,20 +193,22 @@ export default class Order extends Entity {
     const discount = this.discountAmount || 0;
     const tax = this.taxAmount || 0;
     const shipping = this.shippingAmount || 0;
-    
+
     return subtotal - discount + tax + shipping;
   }
 
   // Update order status
   public async updateStatus(status: OrderStatus): Promise<void> {
     this.status = status;
-    
+
     if (status === OrderStatus.SHIPPED) {
       this.shippedAt = new Date();
     } else if (status === OrderStatus.DELIVERED) {
       this.deliveredAt = new Date();
     }
-    
+
     await this.save();
   }
+
+
 }

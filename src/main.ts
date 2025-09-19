@@ -12,16 +12,20 @@ import Questionnaire from "./models/Questionnaire";
 import QuestionnaireStep from "./models/QuestionnaireStep";
 import Question from "./models/Question";
 import QuestionOption from "./models/QuestionOption";
-import Order, { OrderStatus } from "./models/Order";
+import Order from "./models/Order";
 import OrderItem from "./models/OrderItem";
 import Payment from "./models/Payment";
 import ShippingAddress from "./models/ShippingAddress";
 import { createJWTToken, authenticateJWT, getCurrentUser } from "./config/jwt";
 import { uploadToS3, deleteFromS3, isValidImageFile, isValidFileSize } from "./config/s3";
 import Stripe from "stripe";
-import { approveOrder } from "./services/order.service";
+import OrderService from "./services/order.service";
 import UserService from "./services/user.service";
 import TreatmentService from "./services/treatment.service";
+import PaymentService from "./services/payment.service";
+import { processStripeWebhook } from "./services/stripe/webhook";
+import TreatmentProducts from "./models/TreatmentProducts";
+import ShippingOrder from "./models/ShippingOrder";
 
 // Helper function to generate unique clinic slug
 async function generateUniqueSlug(clinicName: string, excludeId?: string): Promise<string> {
@@ -78,8 +82,14 @@ if (!process.env.STRIPE_SECRET_KEY) {
 }
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2025-02-24.acacia',
+  apiVersion: '2025-08-27.basil',
 });
+
+// Validate APP_WEBHOOK_SECRET
+if (!process.env.APP_WEBHOOK_SECRET) {
+  console.error('❌ APP_WEBHOOK_SECRET environment variable is not set');
+  process.exit(1);
+}
 
 // Configure multer for file uploads (store in memory)
 const upload = multer({
@@ -137,7 +147,15 @@ app.use(cors({
 }));
 
 app.use(helmet());
-app.use(express.json()); // Parse JSON bodies
+
+// Conditional JSON parsing - exclude webhook paths that need raw body
+app.use((req, res, next) => {
+  if (req.path === '/webhook/stripe') {
+    next(); // Skip JSON parsing for Stripe webhook
+  } else {
+    express.json()(req, res, next); // Apply JSON parsing for all other routes
+  }
+});
 
 // No session middleware needed for JWT
 
@@ -956,7 +974,7 @@ app.post("/treatments", authenticateJWT, async (req, res) => {
 app.put("/treatments/:id", authenticateJWT, async (req, res) => {
   try {
     const { id } = req.params;
-    const { name } = req.body;
+
     const currentUser = getCurrentUser(req);
 
     if (!currentUser) {
@@ -966,61 +984,19 @@ app.put("/treatments/:id", authenticateJWT, async (req, res) => {
       });
     }
 
-    // Fetch full user data from database to get clinicId
-    const user = await User.findByPk(currentUser.id);
-    if (!user) {
-      return res.status(401).json({
-        success: false,
-        message: "User not found"
-      });
-    }
 
-    // Only allow doctors to update treatments
-    if (user.role !== 'doctor') {
-      return res.status(403).json({
-        success: false,
-        message: "Only doctors can update treatments"
-      });
-    }
+    const treatment = await treatmentService.updateTreatment(id, req.body, currentUser.id)
 
-    // Validate input
-    if (!name || !name.trim()) {
-      return res.status(400).json({
-        success: false,
-        message: "Treatment name is required"
-      });
-    }
-
-    const treatment = await Treatment.findByPk(id);
-    if (!treatment) {
-      return res.status(404).json({
-        success: false,
-        message: "Treatment not found"
-      });
-    }
-
-    // Verify treatment belongs to user's clinic
-    if (treatment.clinicId !== user.clinicId) {
-      return res.status(403).json({
-        success: false,
-        message: "Access denied"
-      });
-    }
-
-    // Update treatment
-    await treatment.update({
-      name: name.trim()
-    });
-
-    console.log('💊 Treatment updated:', { id: treatment.id, name: treatment.name });
 
     res.status(200).json({
       success: true,
       message: "Treatment updated successfully",
       data: {
-        id: treatment.id,
-        name: treatment.name,
-        treatmentLogo: treatment.treatmentLogo,
+        id: treatment?.data?.id,
+        name: treatment?.data?.name,
+        price: treatment?.data?.price,
+        productsPrice: treatment?.data?.productsPrice,
+        treatmentLogo: treatment?.data?.treatmentLogo,
       }
     });
 
@@ -1041,11 +1017,8 @@ app.get("/treatments/:id", async (req, res) => {
     const treatment = await Treatment.findByPk(id, {
       include: [
         {
-          model: Product,
-          as: 'products',
-          through: {
-            attributes: ['dosage', 'numberOfDoses', 'nextDose']
-          }
+          model: TreatmentProducts,
+          as: 'treatmentProducts',
         }
       ]
     });
@@ -1305,6 +1278,101 @@ app.post("/confirm-payment", authenticateJWT, async (req, res) => {
   }
 });
 
+// Create subscription for treatment
+app.post("/payments/treatment/sub", authenticateJWT, async (req, res) => {
+  try {
+    const { treatmentId, billingPlan = 'monthly' } = req.body;
+    const currentUser = getCurrentUser(req);
+
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "Not authenticated"
+      });
+    }
+
+    // Validate required fields
+    if (!treatmentId) {
+      return res.status(400).json({
+        success: false,
+        message: "Treatment ID is required"
+      });
+    }
+
+    // Validate billing plan
+    // TODO only monthly is supported now
+    const validPlans = ['monthly', 'quarterly', 'biannual'];
+    if (!validPlans.includes(billingPlan)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid billing plan. Must be one of: monthly, quarterly, biannual"
+      });
+    }
+
+    const paymentService = new PaymentService();
+    const result = await paymentService.subscribeTreatment(
+      treatmentId,
+      currentUser.id,
+      billingPlan
+    );
+
+    if (result.success) {
+      res.status(200).json(result);
+    } else {
+      res.status(400).json(result);
+    }
+
+  } catch (error) {
+    console.error('Error creating treatment subscription:', error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error"
+    });
+  }
+});
+
+// Create subscription for clinic
+app.post("/payments/clinic/sub", authenticateJWT, async (req, res) => {
+  try {
+    const { clinicId } = req.body;
+    const currentUser = getCurrentUser(req);
+
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "Not authenticated"
+      });
+    }
+
+    // Validate required fields
+    if (!clinicId) {
+      return res.status(400).json({
+        success: false,
+        message: "Clinic ID is required"
+      });
+    }
+
+    const paymentService = new PaymentService();
+    const result = await paymentService.subscribeClinic(
+      clinicId,
+      currentUser.id
+    );
+
+    if (result.success) {
+      res.status(200).json(result);
+    } else {
+      res.status(400).json(result);
+    }
+
+  } catch (error) {
+    console.error('Error creating clinic subscription:', error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error"
+    });
+  }
+});
+
 // Stripe webhook endpoint
 app.post("/webhook/stripe", express.raw({ type: 'application/json' }), async (req, res) => {
   const sig = req.headers['stripe-signature'];
@@ -1328,93 +1396,8 @@ app.post("/webhook/stripe", express.raw({ type: 'application/json' }), async (re
   console.log('🎣 Stripe webhook event received:', event.type);
 
   try {
-    // Handle the event
-    switch (event.type) {
-      case 'payment_intent.succeeded':
-        const paymentIntent = event.data.object;
-        console.log('💳 Payment succeeded:', paymentIntent.id);
-
-        // Find payment record
-        const payment = await Payment.findOne({
-          where: { stripePaymentIntentId: paymentIntent.id },
-          include: [{ model: Order, as: 'order' }]
-        });
-
-        if (payment) {
-          // Update payment status
-          await payment.updateFromStripeEvent(event.data);
-
-          // Update order status
-          await payment.order.updateStatus(OrderStatus.PAID);
-
-          console.log('✅ Order updated to paid status:', payment.order.orderNumber);
-        } else {
-          console.error('❌ Payment record not found for payment intent:', paymentIntent.id);
-        }
-        break;
-
-      case 'payment_intent.payment_failed':
-        const failedPayment = event.data.object;
-        console.log('❌ Payment failed:', failedPayment.id);
-
-        // Find payment record
-        const failedPaymentRecord = await Payment.findOne({
-          where: { stripePaymentIntentId: failedPayment.id },
-          include: [{ model: Order, as: 'order' }]
-        });
-
-        if (failedPaymentRecord) {
-          // Update payment status
-          await failedPaymentRecord.updateFromStripeEvent(event.data);
-
-          // Update order status
-          await failedPaymentRecord.order.updateStatus(OrderStatus.CANCELLED);
-
-          console.log('❌ Order updated to cancelled status:', failedPaymentRecord.order.orderNumber);
-        }
-        break;
-
-      case 'payment_intent.canceled':
-        const cancelledPayment = event.data.object;
-        console.log('🚫 Payment cancelled:', cancelledPayment.id);
-
-        // Find payment record
-        const cancelledPaymentRecord = await Payment.findOne({
-          where: { stripePaymentIntentId: cancelledPayment.id },
-          include: [{ model: Order, as: 'order' }]
-        });
-
-        if (cancelledPaymentRecord) {
-          // Update payment status
-          await cancelledPaymentRecord.updateFromStripeEvent(event.data);
-
-          // Update order status
-          await cancelledPaymentRecord.order.updateStatus(OrderStatus.CANCELLED);
-
-          console.log('🚫 Order updated to cancelled status:', cancelledPaymentRecord.order.orderNumber);
-        }
-        break;
-
-      case 'charge.dispute.created':
-        const dispute = event.data.object;
-        console.log('⚠️ Dispute created:', dispute.id);
-
-        // Find payment by charge ID
-        const disputedPayment = await Payment.findOne({
-          where: { stripeChargeId: dispute.charge },
-          include: [{ model: Order, as: 'order' }]
-        });
-
-        if (disputedPayment) {
-          // Update order status to refunded (dispute handling)
-          await disputedPayment.order.updateStatus(OrderStatus.REFUNDED);
-          console.log('⚠️ Order marked as disputed:', disputedPayment.order.orderNumber);
-        }
-        break;
-
-      default:
-        console.log(`🔍 Unhandled event type ${event.type}`);
-    }
+    // Process the event using the webhook service
+    await processStripeWebhook(event);
 
     // Return a 200 response to acknowledge receipt of the event
     res.status(200).json({ received: true });
@@ -1510,6 +1493,10 @@ app.get("/orders/:id", authenticateJWT, async (req, res) => {
         {
           model: Treatment,
           as: 'treatment'
+        },
+        {
+          model: ShippingOrder,
+          as: 'shippingOrders'
         }
       ]
     });
@@ -1592,9 +1579,9 @@ app.get("/questionnaires/treatment/:treatmentId", async (req, res) => {
 });
 
 
-// Patient management endpoint
 const userService = new UserService();
 const treatmentService = new TreatmentService();
+const orderService = new OrderService();
 
 
 app.put("/patient", authenticateJWT, async (req, res) => {
@@ -1624,71 +1611,71 @@ app.put("/patient", authenticateJWT, async (req, res) => {
   }
 });
 
-app.put("/doctor", authenticateJWT, async (req, res) => {
-  try {
-    const currentUser = getCurrentUser(req);
-
-    if (!currentUser) {
-      return res.status(401).json({
-        success: false,
-        message: "Not authenticated"
-      });
-    }
-
-    const result = await userService.updateUserDoctor(currentUser.id, req.body);
-
-    if (result.success) {
-      res.status(200).json(result);
-    } else {
-      res.status(400).json(result.error);
-    }
-  } catch (error) {
-    console.error('❌ Error updating patient:', error);
-    res.status(500).json({
-      success: false,
-      message: "Internal server error"
-    });
-  }
-});
-
-// Treatment product association endpoint
-app.put("/treatments/:id/products", authenticateJWT, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { productIds = [] } = req.body;
-    const currentUser = getCurrentUser(req);
-
-    if (!currentUser) {
-      return res.status(401).json({
-        success: false,
-        message: "Not authenticated"
-      });
-    }
-
-    const result = await treatmentService.associateProductsWithTreatment(id, productIds, currentUser.id);
-
-    if (result.success) {
-      res.status(200).json(result);
-    } else {
-      res.status(400).json(result);
-    }
-
-  } catch (error) {
-    console.error('❌ Error associating products with treatment:', error);
-    res.status(500).json({
-      success: false,
-      message: "Internal server error"
-    });
-  }
-});
 
 // Order endpoints
-app.post("/orders/approve", authenticateJWT, async (req, res) => {
+app.get("/orders/by-clinic/:clinicId", authenticateJWT, async (req, res) => {
   try {
+    const { clinicId } = req.params;
+    const { page, limit } = req.query;
+    const currentUser = getCurrentUser(req);
+
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "Not authenticated"
+      });
+    }
+
+    const paginationParams = {
+      page: page ? parseInt(page as string) : undefined,
+      limit: limit ? parseInt(limit as string) : undefined
+    };
+
+    const result = await orderService.listOrdersByClinic(clinicId, currentUser.id, paginationParams);
+
+    if (result.success) {
+      res.status(200).json(result);
+    } else {
+      if (result.message === "Forbidden") {
+        res.status(403).json(result);
+      } else {
+        res.status(400).json(result);
+      }
+    }
+
+  } catch (error) {
+    console.error('❌ Error listing orders by clinic:', error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error"
+    });
+  }
+});
+
+app.post("/webhook/orders", async (req, res) => {
+  try {
+    // Validate webhook secret
+    const providedSecret = req.headers['authorization'];
+
+    if (!providedSecret) {
+      return res.status(401).json({
+        success: false,
+        message: "Webhook secret required"
+      });
+    }
+
+
+    if (providedSecret !== process.env.APP_WEBHOOK_SECRET) {
+      return res.status(403).json({
+        success: false,
+        message: "Invalid webhook secret"
+      });
+    }
 
     const { orderId } = req.body;
 
-    const result = approveOrder(orderId);
+
+    const result = await orderService.approveOrder(orderId);
 
     res.json(result);
   } catch (error) {

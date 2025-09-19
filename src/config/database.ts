@@ -16,6 +16,7 @@ import Order from '../models/Order';
 import OrderItem from '../models/OrderItem';
 import Payment from '../models/Payment';
 import ShippingAddress from '../models/ShippingAddress';
+import ShippingOrder from '../models/ShippingOrder';
 
 // Load environment variables from .env.local
 dotenv.config({ path: '.env.local' });
@@ -58,7 +59,7 @@ const sequelizeConfig = {
 
 export const sequelize = new Sequelize(databaseUrl, {
   ...sequelizeConfig,
-  models: [User, Entity, Product, Prescription, Treatment, PrescriptionProducts, TreatmentProducts, Clinic, Questionnaire, QuestionnaireStep, Question, QuestionOption, Order, OrderItem, Payment, ShippingAddress],
+  models: [User, Entity, Product, Prescription, Treatment, PrescriptionProducts, TreatmentProducts, Clinic, Questionnaire, QuestionnaireStep, Question, QuestionOption, Order, OrderItem, Payment, ShippingAddress, ShippingOrder],
 });
 
 export async function initializeDatabase() {

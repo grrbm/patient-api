@@ -45,6 +45,12 @@ export default class Product extends Entity {
     })
     declare imageUrl: string;
 
+    @Column({
+        type: DataType.STRING,
+        allowNull: true,
+    })
+    declare pharmacyProductId?: string;
+
     @BelongsToMany(() => Prescription, () => PrescriptionProducts)
     declare prescriptions: Prescription[];
 

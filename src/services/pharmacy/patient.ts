@@ -32,7 +32,7 @@ interface CreatePatientRequest {
   diseases: PatientDisease[];
   medications: PatientMedication[];
   email: string;
-  phone_number: string;
+  phone_number: string; // The phone number must be 10 characters
   address: PatientAddress;
 }
 
@@ -135,22 +135,22 @@ class PatientService {
 
   async createPatient(patientData: CreatePatientRequest): Promise<PharmacyApiResponse> {
     try {
-      // const response: AxiosResponse = await axios.post(
-      //   `${this.config.baseUrl}/api/clinics/patients`,
-      //   patientData,
-      //   {
-      //     params: {
-      //       api_key: this.config.apiKey
-      //     },
-      //     headers: {
-      //       'Content-Type': 'application/json',
-      //     }
-      //   }
-      // );
+      const response: AxiosResponse = await axios.post(
+        `${this.config.baseUrl}/api/clinics/patients`,
+        patientData,
+        {
+          params: {
+            api_key: this.config.apiKey
+          },
+          headers: {
+            'Content-Type': 'application/json',
+          }
+        }
+      );
 
       return {
         success: true,
-        data: mockPatient
+        data: response.data
       };
     } catch (error) {
       console.error('Error creating patient:', error);
@@ -172,22 +172,22 @@ class PatientService {
 
   async updatePatient(patientId: number, patientData: CreatePatientRequest): Promise<PharmacyApiResponse> {
     try {
-      // const response: AxiosResponse = await axios.put(
-      //   `${this.config.baseUrl}/api/clinics/patients/${patientId}`,
-      //   patientData,
-      //   {
-      //     params: {
-      //       api_key: this.config.apiKey
-      //     },
-      //     headers: {
-      //       'Content-Type': 'application/json',
-      //     }
-      //   }
-      // );
+      const response: AxiosResponse = await axios.put(
+        `${this.config.baseUrl}/api/clinics/patients/${patientId}`,
+        patientData,
+        {
+          params: {
+            api_key: this.config.apiKey
+          },
+          headers: {
+            'Content-Type': 'application/json',
+          }
+        }
+      );
 
       return {
         success: true,
-        data: mockPatient
+        data: response.data
       };
     } catch (error) {
       console.error('Error updating patient:', error);

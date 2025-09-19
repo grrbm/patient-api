@@ -143,30 +143,11 @@ export default class User extends Entity {
   })
   declare medications?: PatientMedication[];
 
-  // Physician/Doctor specific fields
   @Column({
     type: DataType.STRING,
     allowNull: true,
   })
-  declare deaNumber?: string;
-
-  @Column({
-    type: DataType.STRING,
-    allowNull: true,
-  })
-  declare npiNumber?: string;
-
-  @Column({
-    type: DataType.JSON,
-    allowNull: true,
-  })
-  declare licenses?: PhysicianLicense[];
-
-  @Column({
-    type: DataType.STRING,
-    allowNull: true,
-  })
-  declare pharmacyPhysicianId?: string;
+  declare stripeCustomerId?: string;
 
   @ForeignKey(() => Clinic)
   @Column({
