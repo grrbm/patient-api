@@ -39,6 +39,19 @@ export default class Question extends Entity {
     declare questionOrder: number;
 
     @Column({
+        type: DataType.INTEGER,
+        allowNull: true,
+    })
+    declare subQuestionOrder: number;
+
+    @Column({
+        type: DataType.INTEGER,
+        allowNull: true,
+        defaultValue: 0,
+    })
+    declare conditionalLevel: number;
+
+    @Column({
         type: DataType.TEXT,
         allowNull: true,
     })
