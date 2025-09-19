@@ -1,6 +1,8 @@
 import User from '../models/User';
 import { getUser, updateUser } from './db/user';
 import PatientService, { CreatePatientRequest, PatientAddress } from './pharmacy/patient';
+import { ShippingAddressService, AddressData } from './shippingAddress.service';
+import ShippingAddress from '../models/ShippingAddress';
 
 interface UserToPatientValidationResult {
     valid: boolean;
@@ -85,13 +87,40 @@ class UserService {
         };
     }
 
-    mapUserToPatientRequest(user: User): CreatePatientRequest {
-        const address: PatientAddress = {
-            street: user.address!,
-            city: user.city!,
-            state: user.state!,
-            zip: user.zipCode!
-        };
+    async mapUserToPatientRequest(user: User, addressId?: string): Promise<CreatePatientRequest> {
+        let address: PatientAddress;
+
+        if (addressId) {
+            // Use shipping address if provided
+            const shippingAddress = await ShippingAddress.findOne({
+                where: { id: addressId, userId: user.id }
+            });
+
+            if (shippingAddress) {
+                address = {
+                    street: shippingAddress.address,
+                    city: shippingAddress.city,
+                    state: shippingAddress.state,
+                    zip: shippingAddress.zipCode
+                };
+            } else {
+                // Fallback to user address if shipping address not found
+                address = {
+                    street: user.address!,
+                    city: user.city!,
+                    state: user.state!,
+                    zip: user.zipCode!
+                };
+            }
+        } else {
+            // Use user address
+            address = {
+                street: user.address!,
+                city: user.city!,
+                state: user.state!,
+                zip: user.zipCode!
+            };
+        }
 
         return {
             first_name: user.firstName,
@@ -107,7 +136,7 @@ class UserService {
         };
     }
 
-    async syncPatientFromUser(userId: string) {
+    async syncPatientFromUser(userId: string, addressId?: string) {
         try {
             const user = await getUser(userId);
 
@@ -125,7 +154,7 @@ class UserService {
                 };
             }
 
-            const patientRequest = this.mapUserToPatientRequest(user);
+            const patientRequest = await this.mapUserToPatientRequest(user, addressId);
 
             // Check if user already has a pharmacy patient ID
             if (!user.pharmacyPatientId) {
@@ -165,7 +194,7 @@ class UserService {
         }
     }
 
-    async updateUserPatient(userId: string, updateData: Partial<User>) {
+    async updateUserPatient(userId: string, updateData: Partial<User>, addressData?: AddressData,) {
         try {
             const user = await getUser(userId);
 
@@ -191,9 +220,18 @@ class UserService {
             // Update user in database
             await updateUser(userId, safeUpdateData);
 
+            // Handle address update/creation if address data is provided
+            let addressId = addressData?.addressId;
+            if (addressData) {
+                const updatedAddress = await ShippingAddressService.updateOrCreateAddress(
+                    userId,
+                    addressData,
+                );
+                addressId = updatedAddress.id;
+            }
 
             // Attempt to sync patient data with pharmacy
-            await this.syncPatientFromUser(userId);
+            await this.syncPatientFromUser(userId, addressId);
 
             return {
                 success: true,

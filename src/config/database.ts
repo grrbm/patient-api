@@ -61,7 +61,14 @@ const sequelizeConfig = {
 
 export const sequelize = new Sequelize(databaseUrl, {
   ...sequelizeConfig,
-  models: [User, Entity, Product, Prescription, Treatment, PrescriptionProducts, TreatmentProducts, TreatmentPlan, Clinic, Questionnaire, QuestionnaireStep, Question, QuestionOption, Order, OrderItem, Payment, ShippingAddress, ShippingOrder, Subscription],
+  models: [User, Entity, Product,
+    Prescription, Treatment, PrescriptionProducts,
+    TreatmentProducts, Clinic, Questionnaire,
+    QuestionnaireStep, Question, QuestionOption,
+    Order, OrderItem, Payment,
+    ShippingAddress, ShippingOrder, Subscription,
+    TreatmentPlan
+  ],
 });
 
 export async function initializeDatabase() {
