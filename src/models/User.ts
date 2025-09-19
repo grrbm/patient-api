@@ -1,9 +1,9 @@
-import { Table, Column, DataType, ForeignKey, BelongsTo } from 'sequelize-typescript';
+import { Table, Column, DataType, ForeignKey, BelongsTo, HasMany } from 'sequelize-typescript';
 import bcrypt from 'bcrypt';
 import Entity from './Entity';
 import Clinic from './Clinic';
+import ShippingAddress from './ShippingAddress';
 import { PatientAllergy, PatientDisease, PatientMedication } from '../services/pharmacy/patient';
-import { PhysicianLicense } from '../services/pharmacy/physician';
 
 @Table({
   freezeTableName: true,
@@ -62,6 +62,7 @@ export default class User extends Entity {
   })
   declare phoneNumber?: string;
 
+  // TODO: Deprecate this fields in favor of address relationship
   @Column({
     type: DataType.TEXT,
     allowNull: true,
@@ -143,30 +144,11 @@ export default class User extends Entity {
   })
   declare medications?: PatientMedication[];
 
-  // Physician/Doctor specific fields
   @Column({
     type: DataType.STRING,
     allowNull: true,
   })
-  declare deaNumber?: string;
-
-  @Column({
-    type: DataType.STRING,
-    allowNull: true,
-  })
-  declare npiNumber?: string;
-
-  @Column({
-    type: DataType.JSON,
-    allowNull: true,
-  })
-  declare licenses?: PhysicianLicense[];
-
-  @Column({
-    type: DataType.STRING,
-    allowNull: true,
-  })
-  declare pharmacyPhysicianId?: string;
+  declare stripeCustomerId?: string;
 
   @ForeignKey(() => Clinic)
   @Column({
@@ -177,6 +159,9 @@ export default class User extends Entity {
 
   @BelongsTo(() => Clinic)
   declare clinic?: Clinic;
+
+  @HasMany(() => ShippingAddress)
+  declare shippingAddresses: ShippingAddress[];
 
   // Instance methods
   public async validatePassword(password: string): Promise<boolean> {
