@@ -7,6 +7,8 @@ import OrderItem from '../models/OrderItem';
 import Product from '../models/Product';
 import { OrderStatus } from '../models/Order';
 import ShippingOrder, { OrderShippingStatus } from '../models/ShippingOrder';
+import ShippingAddress from '../models/ShippingAddress';
+import UserService from "./user.service";
 
 
 interface ListOrdersByClinicResult {
@@ -174,7 +176,7 @@ class OrderService {
     async approveOrder(orderId: string) {
         // TODO: this method might need to be expanded to create Order items depending on the information approved in the prescription
         try {
-            // Get order with all related data
+            // Get order with all related data including shipping address
             const order = await Order.findOne({
                 where: { id: orderId },
                 include: [
@@ -193,6 +195,11 @@ class OrderService {
                                 attributes: ['id', 'name', 'pharmacyProductId', 'dosage']
                             }
                         ]
+                    },
+                    {
+                        model: ShippingAddress,
+                        as: 'shippingAddress',
+                        attributes: ['id', 'address', 'apartment', 'city', 'state', 'zipCode', 'country']
                     }
                 ]
             });
@@ -225,6 +232,9 @@ class OrderService {
                 };
             }
 
+            // Sync address before creating order
+            const userService = new UserService();
+            await userService.syncPatientFromUser(order.user.id, order.shippingAddressId);
 
 
             // Map order items to pharmacy products
@@ -260,18 +270,12 @@ class OrderService {
 
             const pharmacyOrderId = pharmacyResult.data?.id?.toString();
 
-            // Create shipping address from user information
-            const shippingAddress = [
-                order.user.address,
-                order.user.city && order.user.state ? `${order.user.city}, ${order.user.state}` : null,
-                order.user.zipCode
-            ].filter(Boolean).join(', ') || 'No address provided';
 
-            // Create shipping order
+            // Create shipping order with proper address reference
             await ShippingOrder.create({
                 orderId: order.id,
+                shippingAddressId: order.shippingAddressId,
                 status: OrderShippingStatus.PROCESSING,
-                address: shippingAddress,
                 pharmacyOrderId: pharmacyOrderId
             });
 
