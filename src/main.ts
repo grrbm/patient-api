@@ -1019,6 +1019,10 @@ app.get("/treatments/:id", async (req, res) => {
         {
           model: TreatmentProducts,
           as: 'treatmentProducts',
+        },
+        {
+          model: Product,
+          as: 'products',
         }
       ]
     });
