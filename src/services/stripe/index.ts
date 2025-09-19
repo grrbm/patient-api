@@ -10,8 +10,9 @@ interface CheckoutSubParams {
   stripeCustomerId: string;
   metadata: {
     userId: string;
-    orderId: string;
-    treatmentId: string;
+    orderId?: string;
+    clinicId?: string;
+    treatmentId?: string;
   }
 }
 

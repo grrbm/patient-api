@@ -2,6 +2,8 @@ import Stripe from 'stripe';
 import Payment from '../../models/Payment';
 import Order, { OrderStatus } from '../../models/Order';
 import StripeService from '.';
+import Subscription from '../../models/Subscription';
+import Clinic, { PaymentStatus } from '../../models/Clinic';
 
 export const handlePaymentIntentSucceeded = async (paymentIntent: Stripe.PaymentIntent): Promise<void> => {
     console.log('💳 Payment succeeded:', paymentIntent.id);
@@ -86,18 +88,37 @@ export const handleCheckoutSessionCompleted = async (session: Stripe.Checkout.Se
 
     // Handle subscription checkout completion
     if (session.mode === 'subscription' && session.metadata) {
-        const { orderId } = session.metadata;
+        const { orderId, clinicId } = session.metadata;
         const { subscription } = session;
 
         console.log(" subscription ", subscription)
 
+        let createSub = false
 
-        if (orderId && subscription) {
+
+        if (orderId) {
             const order = await Order.findByPk(orderId);
             if (order) {
-                await order.updateOrderProcessing(subscription as string);
-                console.log('✅ Subscription order updated to payment processing:', order.orderNumber);
+                createSub = true
+                console.log("Order found")
+
             }
+        } else if (clinicId) {
+            const clinic = await Clinic.findByPk(clinicId);
+            if (clinic) {
+                createSub = true
+                console.log("Clinic found")
+            }
+        }
+
+        if (createSub) {
+            console.log("Creating sub")
+            const sub = await Subscription.create({
+                ...(orderId && { orderId: orderId }),
+                ...(clinicId && { clinicId: clinicId }),
+                stripeSubscriptionId: subscription as string
+            })
+            console.log('✅ Subscription created:', sub.id);
         }
     }
 };
@@ -110,14 +131,28 @@ export const handleInvoicePaid = async (invoice: Stripe.Invoice): Promise<void> 
     const subscriptionId = subItem?.parent?.subscription_item_details?.subscription
 
     if (subscriptionId) {
-        const order = await Order.findOne({
+        const sub = await Subscription.findOne({
             where: {
                 stripeSubscriptionId: subscriptionId
             }
         });
-        if (order) {
-            await order.markOrderAsPaid();
-            console.log('✅ Subscription order updated to paid:', order.orderNumber);
+        if (sub) {
+            await sub.markSubAsPaid();
+            console.log('✅ Subscription updated to paid:', sub.id);
+            // TODO if order or clinic, mange the flow
+
+            if (sub.orderId) {
+                //  If renewal create new oder
+            }
+            if (sub.clinicId) {
+                const clinic = await Clinic.findByPk(sub.clinicId);
+                if (clinic) {
+                    await clinic.update({
+                        active: true,
+                        status: PaymentStatus.PAID
+                    })
+                }
+            }
         }
     }
 };
@@ -135,20 +170,39 @@ export const handleInvoicePaymentFailed = async (invoice: Stripe.Invoice): Promi
     const stripeService = new StripeService();
 
     if (subscriptionId) {
-        const order = await Order.findOne({
+        const sub = await Subscription.findOne({
             where: {
                 stripeSubscriptionId: subscriptionId
             }
         });
 
-        if (order) {
+        if (sub) {
+            // TODO: Fix this
             // const subscriptionResponse = await stripeService.getSubscription(subscriptionId);
             // Calculate the due date based on subscription's current period end
             // This gives the customer until the end of their current billing period
             // const validUntil = new Date(subscriptionResponse.current_period_end * 1000);
 
-            await order.markOrderAsPaymentDue(new Date);
-            console.log('⚠️ Subscription order marked as payment due until:', new Date().toISOString(), 'for order:', order.orderNumber);
+            await sub.markSubAsPaymentDue(new Date);
+            console.log('⚠️ Subscription order marked as payment due until:', new Date().toISOString());
+
+            if (sub.orderId) {
+                const order = await Order.findByPk(sub.orderId);
+                if (order) {
+                    await order.update({
+                        status: OrderStatus.PAYMENT_DUE
+                    })
+                }
+            }
+            if (sub.clinicId) {
+                const clinic = await Clinic.findByPk(sub.clinicId);
+                if (clinic) {
+                    await clinic.update({
+                        status: PaymentStatus.PAYMENT_DUE
+                    })
+                }
+            }
+            // TODO if order or clinic, mange the flow
         } else {
             console.warn('⚠️ No order found for failed subscription payment:', subscriptionId);
         }
@@ -163,17 +217,35 @@ export const handleSubscriptionDeleted = async (subscription: Stripe.Subscriptio
     const { id: subscriptionId } = subscription;
 
 
-    const order = await Order.findOne({
+    const sub = await Subscription.findOne({
         where: {
             stripeSubscriptionId: subscriptionId
         }
     });
-    if (order) {
-        await order.markOrderAsCanceled();
-        console.log('✅ Subscription order updated to paid:', order.orderNumber);
+    if (sub) {
+        await sub.markSubAsCanceled();
+        console.log('✅ Subscription updated to canceled:', sub.id);
+
+        
+        if (sub.orderId) {
+            const order = await Order.findByPk(sub.orderId);
+            if (order) {
+                await order.update({
+                    status: OrderStatus.CANCELLED
+                })
+            }
+        }
+
+        if (sub.clinicId) {
+            const clinic = await Clinic.findByPk(sub.clinicId);
+            if (clinic) {
+                await clinic.update({
+                    active: false,
+                    status: PaymentStatus.CANCELLED
+                })
+            }
+        }
     }
-
-
 };
 
 
