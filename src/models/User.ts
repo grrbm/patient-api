@@ -62,6 +62,7 @@ export default class User extends Entity {
   })
   declare phoneNumber?: string;
 
+  // TODO: Deprecate this fields in favor of address relationship
   @Column({
     type: DataType.TEXT,
     allowNull: true,
