@@ -182,14 +182,6 @@ export const handleInvoicePaymentFailed = async (invoice: Stripe.Invoice): Promi
         });
 
         if (sub) {
-            // TODO: Fix this
-            // const subscriptionResponse = await stripeService.getSubscription(subscriptionId);
-            // Calculate the due date based on subscription's current period end
-            // This gives the customer until the end of their current billing period
-            // const validUntil = new Date(subscriptionResponse.current_period_end * 1000);
-
-            await sub.markSubAsPaymentDue(new Date);
-            console.log('⚠️ Subscription order marked as payment due until:', new Date().toISOString());
 
             if (sub.orderId) {
                 const order = await Order.findByPk(sub.orderId);
@@ -206,6 +198,17 @@ export const handleInvoicePaymentFailed = async (invoice: Stripe.Invoice): Promi
                         status: PaymentStatus.PAYMENT_DUE
                     })
                 }
+            }
+
+            const subscriptionResponse = await stripeService.getSubscription(subscriptionId);
+
+            const currentPeriodEnd = subscriptionResponse.items.data[0]
+
+            if (currentPeriodEnd?.current_period_end) {
+                const validUntil = new Date(currentPeriodEnd?.current_period_end * 1000);
+
+                await sub.markSubAsPaymentDue(validUntil);
+                console.log('⚠️ Subscription order marked as payment due until:', validUntil.toISOString());
             }
         } else {
             console.warn('⚠️ No order found for failed subscription payment:', subscriptionId);
@@ -230,7 +233,6 @@ export const handleSubscriptionDeleted = async (subscription: Stripe.Subscriptio
         await sub.markSubAsCanceled();
         console.log('✅ Subscription updated to canceled:', sub.id);
 
-        
         if (sub.orderId) {
             const order = await Order.findByPk(sub.orderId);
             if (order) {
