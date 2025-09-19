@@ -44,6 +44,12 @@ export default class Question extends Entity {
     })
     declare helpText: string;
 
+    @Column({
+        type: DataType.TEXT,
+        allowNull: true,
+    })
+    declare footerNote: string;
+
     @ForeignKey(() => QuestionnaireStep)
     @Column({
         type: DataType.UUID,
