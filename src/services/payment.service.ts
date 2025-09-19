@@ -7,6 +7,7 @@ import Product from '../models/Product';
 import TreatmentProducts from '../models/TreatmentProducts';
 import ShippingAddress from '../models/ShippingAddress';
 import StripeService from './stripe';
+import { ShippingAddressService, AddressData } from './shippingAddress.service';
 
 interface SubscribeTreatmentResult {
     success: boolean;
@@ -48,7 +49,8 @@ class PaymentService {
             state: string;
             zipCode: string;
             country: string;
-        }
+        },
+        addressData?: AddressData
     ): Promise<SubscribeTreatmentResult> {
         try {
             // Get user and validate
@@ -106,6 +108,17 @@ class PaymentService {
                 await user.update({ stripeCustomerId });
             }
 
+            // Handle address creation/update if addressData is provided
+            let addressId = addressData?.addressId;
+            if (addressData) {
+                const updatedAddress = await ShippingAddressService.updateOrCreateAddress(
+                    userId,
+                    addressData,
+                );
+                addressId = updatedAddress.id;
+            }
+
+
             // Calculate order amount
             const totalAmount = treatment.price;
 
@@ -118,7 +131,8 @@ class PaymentService {
                 billingPlan: billingPlan,
                 subtotalAmount: totalAmount,
                 totalAmount: totalAmount,
-                questionnaireAnswers: questionnaireAnswers
+                questionnaireAnswers: questionnaireAnswers,
+                shippingAddressId: addressId
             });
 
             // Create shipping address if provided
