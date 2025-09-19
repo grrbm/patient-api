@@ -20,6 +20,12 @@ export default class Question extends Entity {
     declare answerType: string;
 
     @Column({
+        type: DataType.TEXT,
+        allowNull: true,
+    })
+    declare questionSubtype: string;
+
+    @Column({
         type: DataType.BOOLEAN,
         allowNull: false,
         defaultValue: false,
