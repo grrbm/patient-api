@@ -1331,6 +1331,48 @@ app.post("/payments/treatment/sub", authenticateJWT, async (req, res) => {
   }
 });
 
+// Create subscription for clinic
+app.post("/payments/clinic/sub", authenticateJWT, async (req, res) => {
+  try {
+    const { clinicId } = req.body;
+    const currentUser = getCurrentUser(req);
+
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "Not authenticated"
+      });
+    }
+
+    // Validate required fields
+    if (!clinicId) {
+      return res.status(400).json({
+        success: false,
+        message: "Clinic ID is required"
+      });
+    }
+
+    const paymentService = new PaymentService();
+    const result = await paymentService.subscribeClinic(
+      clinicId,
+      currentUser.id
+    );
+
+    if (result.success) {
+      res.status(200).json(result);
+    } else {
+      res.status(400).json(result);
+    }
+
+  } catch (error) {
+    console.error('Error creating clinic subscription:', error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error"
+    });
+  }
+});
+
 // Stripe webhook endpoint
 app.post("/webhook/stripe", express.raw({ type: 'application/json' }), async (req, res) => {
   const sig = req.headers['stripe-signature'];
