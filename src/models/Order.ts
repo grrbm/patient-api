@@ -4,9 +4,9 @@ import User from './User';
 import Treatment from './Treatment';
 import Questionnaire from './Questionnaire';
 import OrderItem from './OrderItem';
-import Payment from './Payment';
 import ShippingAddress from './ShippingAddress';
 import ShippingOrder from './ShippingOrder';
+import Subscription from './Subscription';
 
 export enum OrderStatus {
   PENDING = 'pending',
@@ -139,38 +139,40 @@ export default class Order extends Entity {
   })
   declare deliveredAt?: Date;
 
-  @Column({
-    type: DataType.DATE,
-    allowNull: true,
-  })
-  declare cancelledAt?: Date;
+  // @Column({
+  //   type: DataType.DATE,
+  //   allowNull: true,
+  // })
+  // declare cancelledAt?: Date;
 
-  @Column({
-    type: DataType.DATE,
-    allowNull: true,
-  })
-  declare paymentDue?: Date;
+  // @Column({
+  //   type: DataType.DATE,
+  //   allowNull: true,
+  // })
+  // declare paymentDue?: Date;
 
-  @Column({
-    type: DataType.STRING,
-    allowNull: true,
-    unique: true,
-  })
-  declare stripeSubscriptionId?: string;
+  // @Column({
+  //   type: DataType.STRING,
+  //   allowNull: true,
+  //   unique: true,
+  // })
+  // declare stripeSubscriptionId?: string;
 
-  @Column({
-    type: DataType.DATE,
-    allowNull: true,
-  })
-  declare paidAt?: Date;
+  // @Column({
+  //   type: DataType.DATE,
+  //   allowNull: true,
+  // })
+  // declare paidAt?: Date;
 
+  @HasOne(() => Subscription)
+  declare subscription?: Subscription;
 
 
   @HasMany(() => OrderItem)
   declare orderItems: OrderItem[];
 
-  @HasOne(() => Payment)
-  declare payment: Payment;
+  // @HasOne(() => Payment)
+  // declare payment: Payment;
 
   @HasOne(() => ShippingAddress)
   declare shippingAddress: ShippingAddress;
@@ -208,27 +210,5 @@ export default class Order extends Entity {
     await this.save();
   }
 
-  public async markOrderAsPaid(): Promise<void> {
-    this.status = OrderStatus.PAID;
-    this.paidAt = new Date()
-    await this.save();
-  }
 
-  public async updateOrderProcessing(stripeSubscriptionId: string): Promise<void> {
-    this.stripeSubscriptionId = stripeSubscriptionId;
-    this.status = OrderStatus.PAYMENT_PROCESSING;
-    await this.save();
-  }
-
-  public async markOrderAsCanceled(): Promise<void> {
-    this.status = OrderStatus.CANCELLED;
-    this.cancelledAt = new Date()
-    await this.save();
-  }  
-  
-  public async markOrderAsPaymentDue(dueDate: Date): Promise<void> {
-    this.status = OrderStatus.PAYMENT_DUE;
-    this.paymentDue = dueDate
-    await this.save();
-  }
 }
