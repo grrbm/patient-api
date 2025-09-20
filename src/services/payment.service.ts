@@ -38,7 +38,8 @@ class PaymentService {
         treatmentId: string,
         userId: string,
         billingPlan: BillingPlan = BillingPlan.MONTHLY,
-        stripePriceId?: string
+        stripePriceId?: string,
+        questionnaireAnswers?: Record<string, string>
     ): Promise<SubscribeTreatmentResult> {
         try {
             // Get user and validate
@@ -107,7 +108,8 @@ class PaymentService {
                 status: OrderStatus.PENDING,
                 billingPlan: billingPlan,
                 subtotalAmount: totalAmount,
-                totalAmount: totalAmount
+                totalAmount: totalAmount,
+                questionnaireAnswers: questionnaireAnswers
             });
 
             // Create order items from treatment products
