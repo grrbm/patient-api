@@ -1349,20 +1349,28 @@ app.post("/payments/treatment/sub", async (req, res) => {
       });
     }
 
-    const paymentService = new PaymentService();
+    // Look up the treatment plan to get the billing interval
+    const treatmentPlan = await TreatmentPlan.findOne({
+      where: { stripePriceId }
+    });
     
-    // For now, map stripePriceId to billing plan - this can be enhanced later
-    let billingPlan = 'monthly'; // default
-    if (stripePriceId.includes('quarterly')) {
-      billingPlan = 'quarterly';
-    } else if (stripePriceId.includes('annual')) {
-      billingPlan = 'annual';
+    if (!treatmentPlan) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid stripe price ID - no matching treatment plan found"
+      });
     }
+    
+    const billingPlan = treatmentPlan.billingInterval;
+    console.log(`💳 Using billing plan: ${billingPlan} for stripePriceId: ${stripePriceId}`);
+
+    const paymentService = new PaymentService();
     
     const result = await paymentService.subscribeTreatment(
       treatmentId,
       currentUser.id,
-      billingPlan as any
+      billingPlan as any,
+      stripePriceId
     );
 
     if (result.success) {

@@ -37,7 +37,8 @@ class PaymentService {
     async subscribeTreatment(
         treatmentId: string,
         userId: string,
-        billingPlan: BillingPlan = BillingPlan.MONTHLY
+        billingPlan: BillingPlan = BillingPlan.MONTHLY,
+        stripePriceId?: string
     ): Promise<SubscribeTreatmentResult> {
         try {
             // Get user and validate
@@ -131,7 +132,7 @@ class PaymentService {
             // Create Stripe subscription with payment intent
             const subscription = await this.stripeService.createSubscriptionWithPaymentIntent({
                 customerId: stripeCustomerId,
-                priceId: treatment.stripePriceId,
+                priceId: stripePriceId || treatment.stripePriceId, // Use provided stripePriceId or fallback to treatment
                 metadata: {
                     userId: userId,
                     orderId: order.id,
