@@ -11,7 +11,8 @@ interface SubscribeTreatmentResult {
     success: boolean;
     message: string;
     data?: {
-        paymentUrl: string;
+        clientSecret: string;
+        subscriptionId: string;
         orderId: string;
     };
     error?: string;
@@ -127,13 +128,10 @@ class PaymentService {
                 console.log(`✅ Created ${orderItems.length} order items for treatment subscription`);
             }
 
-            // Create Stripe checkout session
-            const checkoutSession = await this.stripeService.checkoutSub({
-                line_items: [{
-                    price: treatment.stripePriceId,
-                    quantity: 1
-                }],
-                stripeCustomerId: stripeCustomerId,
+            // Create Stripe subscription with payment intent
+            const subscription = await this.stripeService.createSubscriptionWithPaymentIntent({
+                customerId: stripeCustomerId,
+                priceId: treatment.stripePriceId,
                 metadata: {
                     userId: userId,
                     orderId: order.id,
@@ -141,11 +139,26 @@ class PaymentService {
                 }
             });
 
+            console.log('📋 Subscription created:', JSON.stringify(subscription, null, 2));
+
+            // Extract client secret from the subscription's payment intent
+            const paymentIntent = (subscription as any).latest_invoice?.payment_intent;
+            console.log('📋 Latest invoice:', (subscription as any).latest_invoice);
+            console.log('📋 Payment intent:', paymentIntent);
+            
+            if (!paymentIntent || !paymentIntent.client_secret) {
+                console.error('❌ No payment intent or client secret found');
+                console.error('❌ Subscription status:', subscription.status);
+                console.error('❌ Latest invoice status:', (subscription as any).latest_invoice?.status);
+                throw new Error('Failed to create payment intent for subscription');
+            }
+
             return {
                 success: true,
-                message: "Subscription checkout session created successfully",
+                message: "Subscription with payment intent created successfully",
                 data: {
-                    paymentUrl: checkoutSession.url!,
+                    clientSecret: paymentIntent.client_secret,
+                    subscriptionId: subscription.id,
                     orderId: order.id
                 }
             };

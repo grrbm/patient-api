@@ -1,7 +1,7 @@
 import Stripe from 'stripe';
 import { stripe } from './config';
 
-const FRONTEND_URL = process.env.FRONTEND_URL || "localhost:3000"
+const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:3000"
 
 
 
@@ -83,6 +83,64 @@ class StripeService {
         enabled: true,
       },
     });
+  }
+
+  async createSubscriptionWithPaymentIntent({
+    customerId,
+    priceId,
+    metadata
+  }: {
+    customerId: string;
+    priceId: string;
+    metadata?: Record<string, string>;
+  }) {
+    // Create subscription with payment behavior to create payment intent
+    const subscription = await stripe.subscriptions.create({
+      customer: customerId,
+      items: [{ price: priceId }],
+      payment_behavior: 'default_incomplete',
+      payment_settings: { save_default_payment_method: 'on_subscription' },
+      expand: ['latest_invoice'],
+      metadata: metadata || {}
+    });
+
+    // Get the latest invoice
+    const invoice = subscription.latest_invoice as any;
+    
+    // Create a payment intent for the invoice if it doesn't exist
+    if (invoice && !invoice.payment_intent) {
+      const paymentIntent = await stripe.paymentIntents.create({
+        amount: invoice.amount_due,
+        currency: invoice.currency,
+        customer: customerId,
+        automatic_payment_methods: {
+          enabled: true,
+        },
+        metadata: {
+          ...metadata,
+          invoice_id: invoice.id,
+          subscription_id: subscription.id
+        }
+      });
+      
+      console.log('💳 Created payment intent:', {
+        id: paymentIntent.id,
+        client_secret: paymentIntent.client_secret,
+        amount: paymentIntent.amount,
+        status: paymentIntent.status
+      });
+      
+      // Return subscription with the payment intent attached
+      return {
+        ...subscription,
+        latest_invoice: {
+          ...invoice,
+          payment_intent: paymentIntent
+        }
+      };
+    }
+
+    return subscription;
   }
 
   // Product management methods
