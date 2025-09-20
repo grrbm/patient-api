@@ -1288,15 +1288,48 @@ app.post("/confirm-payment", authenticateJWT, async (req, res) => {
 });
 
 // Create subscription for treatment
-app.post("/payments/treatment/sub", authenticateJWT, async (req, res) => {
+app.post("/payments/treatment/sub", async (req, res) => {
   try {
-    const { treatmentId, billingPlan = 'monthly' } = req.body;
-    const currentUser = getCurrentUser(req);
-
+    const { treatmentId, stripePriceId, userDetails } = req.body;
+    
+    let currentUser = null;
+    
+    // Try to get user from auth token if provided
+    const authHeader = req.headers.authorization;
+    if (authHeader) {
+      try {
+        currentUser = getCurrentUser(req);
+      } catch (error) {
+        // Ignore auth errors for public endpoint
+      }
+    }
+    
+    // If no authenticated user and userDetails provided, create/find user
+    if (!currentUser && userDetails) {
+      const { firstName, lastName, email, phoneNumber } = userDetails;
+      
+      // Try to find existing user by email
+      currentUser = await User.findByEmail(email);
+      
+      if (!currentUser) {
+        // Create new user account
+        console.log('🔐 Creating user account for subscription:', email);
+        currentUser = await User.createUser({
+          firstName,
+          lastName,
+          email,
+          password: 'TempPassword123!', // Temporary password
+          role: 'patient',
+          phoneNumber
+        });
+        console.log('✅ User account created:', currentUser.id);
+      }
+    }
+    
     if (!currentUser) {
-      return res.status(401).json({
+      return res.status(400).json({
         success: false,
-        message: "Not authenticated"
+        message: "User authentication or user details required"
       });
     }
 
@@ -1308,21 +1341,28 @@ app.post("/payments/treatment/sub", authenticateJWT, async (req, res) => {
       });
     }
 
-    // Validate billing plan
-    // TODO only monthly is supported now
-    const validPlans = ['monthly', 'quarterly', 'biannual'];
-    if (!validPlans.includes(billingPlan)) {
+    // Validate stripe price ID
+    if (!stripePriceId) {
       return res.status(400).json({
         success: false,
-        message: "Invalid billing plan. Must be one of: monthly, quarterly, biannual"
+        message: "Stripe price ID is required"
       });
     }
 
     const paymentService = new PaymentService();
+    
+    // For now, map stripePriceId to billing plan - this can be enhanced later
+    let billingPlan = 'monthly'; // default
+    if (stripePriceId.includes('quarterly')) {
+      billingPlan = 'quarterly';
+    } else if (stripePriceId.includes('annual')) {
+      billingPlan = 'annual';
+    }
+    
     const result = await paymentService.subscribeTreatment(
       treatmentId,
       currentUser.id,
-      billingPlan
+      billingPlan as any
     );
 
     if (result.success) {
