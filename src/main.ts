@@ -25,6 +25,7 @@ import TreatmentService from "./services/treatment.service";
 import PaymentService from "./services/payment.service";
 import { processStripeWebhook } from "./services/stripe/webhook";
 import TreatmentProducts from "./models/TreatmentProducts";
+import TreatmentPlan from "./models/TreatmentPlan";
 import ShippingOrder from "./models/ShippingOrder";
 
 // Helper function to generate unique clinic slug
@@ -1023,6 +1024,10 @@ app.get("/treatments/:id", async (req, res) => {
         {
           model: Product,
           as: 'products',
+        },
+        {
+          model: TreatmentPlan,
+          as: 'treatmentPlans',
         }
       ]
     });

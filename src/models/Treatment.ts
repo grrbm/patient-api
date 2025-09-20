@@ -4,6 +4,7 @@ import User from './User';
 import Clinic from './Clinic';
 import Product from './Product';
 import TreatmentProducts from './TreatmentProducts';
+import TreatmentPlan from './TreatmentPlan';
 import Questionnaire from './Questionnaire';
 
 @Table({
@@ -83,6 +84,9 @@ export default class Treatment extends Entity {
 
     @HasMany(() => TreatmentProducts)
     declare treatmentProducts: TreatmentProducts[];
+
+    @HasMany(() => TreatmentPlan)
+    declare treatmentPlans: TreatmentPlan[];
 
     @HasMany(() => Questionnaire)
     declare questionnaires: Questionnaire[];
