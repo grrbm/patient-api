@@ -1290,7 +1290,7 @@ app.post("/confirm-payment", authenticateJWT, async (req, res) => {
 // Create subscription for treatment
 app.post("/payments/treatment/sub", async (req, res) => {
   try {
-    const { treatmentId, stripePriceId, userDetails, questionnaireAnswers } = req.body;
+    const { treatmentId, stripePriceId, userDetails, questionnaireAnswers, shippingInfo } = req.body;
     
     let currentUser = null;
     
@@ -1371,7 +1371,8 @@ app.post("/payments/treatment/sub", async (req, res) => {
       currentUser.id,
       billingPlan as any,
       stripePriceId,
-      questionnaireAnswers
+      questionnaireAnswers,
+      shippingInfo
     );
 
     if (result.success) {

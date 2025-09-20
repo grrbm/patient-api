@@ -5,6 +5,7 @@ import Order, { OrderStatus, BillingPlan } from '../models/Order';
 import OrderItem from '../models/OrderItem';
 import Product from '../models/Product';
 import TreatmentProducts from '../models/TreatmentProducts';
+import ShippingAddress from '../models/ShippingAddress';
 import StripeService from './stripe';
 
 interface SubscribeTreatmentResult {
@@ -39,7 +40,15 @@ class PaymentService {
         userId: string,
         billingPlan: BillingPlan = BillingPlan.MONTHLY,
         stripePriceId?: string,
-        questionnaireAnswers?: Record<string, string>
+        questionnaireAnswers?: Record<string, string>,
+        shippingInfo?: {
+            address: string;
+            apartment?: string;
+            city: string;
+            state: string;
+            zipCode: string;
+            country: string;
+        }
     ): Promise<SubscribeTreatmentResult> {
         try {
             // Get user and validate
@@ -111,6 +120,19 @@ class PaymentService {
                 totalAmount: totalAmount,
                 questionnaireAnswers: questionnaireAnswers
             });
+
+            // Create shipping address if provided
+            if (shippingInfo) {
+                await ShippingAddress.create({
+                    orderId: order.id,
+                    address: shippingInfo.address,
+                    apartment: shippingInfo.apartment,
+                    city: shippingInfo.city,
+                    state: shippingInfo.state,
+                    zipCode: shippingInfo.zipCode,
+                    country: shippingInfo.country
+                });
+            }
 
             // Create order items from treatment products
             if (treatment.treatmentProducts && treatment.treatmentProducts.length > 0) {
