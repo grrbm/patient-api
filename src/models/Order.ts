@@ -7,6 +7,7 @@ import OrderItem from './OrderItem';
 import ShippingAddress from './ShippingAddress';
 import ShippingOrder from './ShippingOrder';
 import Subscription from './Subscription';
+import TreatmentPlan, { BillingInterval } from './TreatmentPlan';
 
 export enum OrderStatus {
   PENDING = 'pending',
@@ -20,12 +21,6 @@ export enum OrderStatus {
   REFUNDED = 'refunded'
 }
 
-
-export enum BillingPlan {
-  MONTHLY = 'monthly',
-  QUARTERLY = 'quarterly',
-  BIANNUAL = 'biannual'
-}
 
 @Table({
   freezeTableName: true,
@@ -69,6 +64,16 @@ export default class Order extends Entity {
   @BelongsTo(() => Questionnaire)
   declare questionnaire?: Questionnaire;
 
+  @ForeignKey(() => TreatmentPlan)
+  @Column({
+    type: DataType.UUID,
+    allowNull: true,
+  })
+  declare treatmentPlanId?: string;
+
+  @BelongsTo(() => TreatmentPlan)
+  declare treatmentPlan?: TreatmentPlan;
+
   @Column({
     type: DataType.ENUM(...Object.values(OrderStatus)),
     allowNull: false,
@@ -77,10 +82,10 @@ export default class Order extends Entity {
   declare status: OrderStatus;
 
   @Column({
-    type: DataType.ENUM(...Object.values(BillingPlan)),
+    type: DataType.ENUM(...Object.values(BillingInterval)),
     allowNull: false,
   })
-  declare billingPlan: BillingPlan;
+  declare billingInterval: BillingInterval;
 
   @Column({
     type: DataType.DECIMAL(10, 2),
@@ -139,6 +144,11 @@ export default class Order extends Entity {
   })
   declare deliveredAt?: Date;
 
+  @Column({
+    type: DataType.STRING,
+    allowNull: true,
+  })
+  declare paymentIntentId: string;
 
   @HasOne(() => Subscription)
   declare subscription?: Subscription;
