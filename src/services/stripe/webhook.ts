@@ -141,12 +141,13 @@ export const handleInvoicePaid = async (invoice: Stripe.Invoice): Promise<void> 
             console.log('✅ Subscription updated to paid:', sub.id);
 
             if (sub.orderId) {
-                //  If renewal create new oder
                 const order = await Order.findByPk(sub.orderId);
                 if (order) {
                     await order.update({
                         status: PaymentStatus.PAID
                     })
+                    // TODO: send a new order to pharmacy
+                    console.log("Sending new order ",  order.shippingOrders.length)
                 }
             }
             if (sub.clinicId) {
@@ -198,6 +199,11 @@ export const handleInvoicePaymentFailed = async (invoice: Stripe.Invoice): Promi
                         status: PaymentStatus.PAYMENT_DUE
                     })
                 }
+            }
+
+            if (sub.status == PaymentStatus.CANCELLED) {
+                console.warn('⚠️ Subscription has been cancelled', subscriptionId);
+                return
             }
 
             const subscriptionResponse = await stripeService.getSubscription(subscriptionId);
