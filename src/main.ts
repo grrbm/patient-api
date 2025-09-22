@@ -1291,9 +1291,9 @@ app.post("/confirm-payment", authenticateJWT, async (req, res) => {
 app.post("/payments/treatment/sub", async (req, res) => {
   try {
     const { treatmentId, stripePriceId, userDetails, questionnaireAnswers, shippingInfo } = req.body;
-    
+
     let currentUser = null;
-    
+
     // Try to get user from auth token if provided
     const authHeader = req.headers.authorization;
     if (authHeader) {
@@ -1303,14 +1303,14 @@ app.post("/payments/treatment/sub", async (req, res) => {
         // Ignore auth errors for public endpoint
       }
     }
-    
+
     // If no authenticated user and userDetails provided, create/find user
     if (!currentUser && userDetails) {
       const { firstName, lastName, email, phoneNumber } = userDetails;
-      
+
       // Try to find existing user by email
       currentUser = await User.findByEmail(email);
-      
+
       if (!currentUser) {
         // Create new user account
         console.log('🔐 Creating user account for subscription:', email);
@@ -1325,7 +1325,7 @@ app.post("/payments/treatment/sub", async (req, res) => {
         console.log('✅ User account created:', currentUser.id);
       }
     }
-    
+
     if (!currentUser) {
       return res.status(400).json({
         success: false,
@@ -1353,26 +1353,29 @@ app.post("/payments/treatment/sub", async (req, res) => {
     const treatmentPlan = await TreatmentPlan.findOne({
       where: { stripePriceId }
     });
-    
+
     if (!treatmentPlan) {
       return res.status(400).json({
         success: false,
         message: "Invalid stripe price ID - no matching treatment plan found"
       });
     }
-    
-    const billingPlan = treatmentPlan.billingInterval;
-    console.log(`💳 Using billing plan: ${billingPlan} for stripePriceId: ${stripePriceId}`);
+
+    const billingInterval = treatmentPlan.billingInterval;
+    console.log(`💳 Using billing plan: ${billingInterval} for stripePriceId: ${stripePriceId}`);
 
     const paymentService = new PaymentService();
-    
+
     const result = await paymentService.subscribeTreatment(
-      treatmentId,
-      currentUser.id,
-      billingPlan as any,
-      stripePriceId,
-      questionnaireAnswers,
-      shippingInfo
+      {
+        treatmentId,
+        treatmentPlanId: treatmentPlan.id,
+        userId: currentUser.id,
+        billingInterval,
+        stripePriceId,
+        questionnaireAnswers,
+        shippingInfo
+      }
     );
 
     if (result.success) {
