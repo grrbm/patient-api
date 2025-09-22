@@ -1,21 +1,22 @@
 import User from '../models/User';
 import Treatment from '../models/Treatment';
 import Clinic from '../models/Clinic';
-import Order, { OrderStatus, BillingPlan } from '../models/Order';
+import Order, { OrderStatus } from '../models/Order';
 import OrderItem from '../models/OrderItem';
 import Product from '../models/Product';
 import TreatmentProducts from '../models/TreatmentProducts';
 import ShippingAddress from '../models/ShippingAddress';
 import StripeService from './stripe';
-import { ShippingAddressService, AddressData } from './shippingAddress.service';
+import { BillingInterval } from '../models/TreatmentPlan';
 
 interface SubscribeTreatmentResult {
     success: boolean;
     message: string;
     data?: {
         clientSecret: string;
-        subscriptionId: string;
+        subscriptionId?: string;
         orderId: string;
+        paymentIntentId: string;
     };
     error?: string;
 }
@@ -37,20 +38,30 @@ class PaymentService {
     }
 
     async subscribeTreatment(
-        treatmentId: string,
-        userId: string,
-        billingPlan: BillingPlan = BillingPlan.MONTHLY,
-        stripePriceId?: string,
-        questionnaireAnswers?: Record<string, string>,
-        shippingInfo?: {
-            address: string;
-            apartment?: string;
-            city: string;
-            state: string;
-            zipCode: string;
-            country: string;
-        },
-        addressData?: AddressData
+        {
+            treatmentId,
+            treatmentPlanId,
+            userId,
+            shippingInfo,
+            billingInterval = BillingInterval.MONTHLY,
+            stripePriceId,
+            questionnaireAnswers,
+        }: {
+            treatmentId: string,
+            treatmentPlanId: string,
+            userId: string,
+            shippingInfo: {
+                address: string;
+                apartment?: string;
+                city: string;
+                state: string;
+                zipCode: string;
+                country: string;
+            },
+            billingInterval: BillingInterval,
+            stripePriceId: string,
+            questionnaireAnswers?: Record<string, string>,
+        }
     ): Promise<SubscribeTreatmentResult> {
         try {
             // Get user and validate
@@ -108,45 +119,33 @@ class PaymentService {
                 await user.update({ stripeCustomerId });
             }
 
-            // Handle address creation/update if addressData is provided
-            let addressId = addressData?.addressId;
-            if (addressData) {
-                const updatedAddress = await ShippingAddressService.updateOrCreateAddress(
-                    userId,
-                    addressData,
-                );
-                addressId = updatedAddress.id;
-            }
-
 
             // Calculate order amount
             const totalAmount = treatment.price;
 
+
+            const shippingAddress = await ShippingAddress.create({
+                address: shippingInfo.address,
+                apartment: shippingInfo.apartment,
+                city: shippingInfo.city,
+                state: shippingInfo.state,
+                zipCode: shippingInfo.zipCode,
+                country: shippingInfo.country,
+                userId
+            });
             // Create order
             const order = await Order.create({
                 orderNumber: Order.generateOrderNumber(),
                 userId: userId,
                 treatmentId: treatmentId,
+                treatmentPlanId: treatmentPlanId,
                 status: OrderStatus.PENDING,
-                billingPlan: billingPlan,
+                billingInterval: billingInterval,
                 subtotalAmount: totalAmount,
                 totalAmount: totalAmount,
                 questionnaireAnswers: questionnaireAnswers,
-                shippingAddressId: addressId
+                shippingAddressId: shippingAddress.id
             });
-
-            // Create shipping address if provided
-            if (shippingInfo) {
-                await ShippingAddress.create({
-                    orderId: order.id,
-                    address: shippingInfo.address,
-                    apartment: shippingInfo.apartment,
-                    city: shippingInfo.city,
-                    state: shippingInfo.state,
-                    zipCode: shippingInfo.zipCode,
-                    country: shippingInfo.country
-                });
-            }
 
             // Create order items from treatment products
             if (treatment.treatmentProducts && treatment.treatmentProducts.length > 0) {
@@ -167,38 +166,41 @@ class PaymentService {
                 console.log(`✅ Created ${orderItems.length} order items for treatment subscription`);
             }
 
-            // Create Stripe subscription with payment intent
-            const subscription = await this.stripeService.createSubscriptionWithPaymentIntent({
-                customerId: stripeCustomerId,
-                priceId: stripePriceId || treatment.stripePriceId, // Use provided stripePriceId or fallback to treatment
-                metadata: {
+            // Create Stripe payment intent for manual capture (subscription created after approval)
+            // Default expiration: 48 hours (2880 minutes) for manual capture orders
+            const paymentIntent = await this.stripeService.createPaymentIntent(
+                totalAmount,
+                'usd',
+                stripeCustomerId,
+                {
                     userId: userId,
                     orderId: order.id,
-                    treatmentId: treatmentId
+                    treatmentId: treatmentId,
+                    stripePriceId: stripePriceId,
+                    order_type: 'subscription_initial_payment'
                 }
-            });
+            );
 
-            console.log('📋 Subscription created:', JSON.stringify(subscription, null, 2));
+            console.log('📋 Payment intent created:', JSON.stringify(paymentIntent, null, 2));
 
-            // Extract client secret from the subscription's payment intent
-            const paymentIntent = (subscription as any).latest_invoice?.payment_intent;
-            console.log('📋 Latest invoice:', (subscription as any).latest_invoice);
-            console.log('📋 Payment intent:', paymentIntent);
-            
             if (!paymentIntent || !paymentIntent.client_secret) {
                 console.error('❌ No payment intent or client secret found');
-                console.error('❌ Subscription status:', subscription.status);
-                console.error('❌ Latest invoice status:', (subscription as any).latest_invoice?.status);
-                throw new Error('Failed to create payment intent for subscription');
+                throw new Error('Failed to create payment intent');
             }
+
+            // Update order with payment intent ID and stripePriceId for later subscription creation
+            await order.update({
+                paymentIntentId: paymentIntent.id,
+                stripePriceId: stripePriceId
+            });
 
             return {
                 success: true,
-                message: "Subscription with payment intent created successfully",
+                message: "Payment intent created successfully (manual capture enabled - subscription will be created after approval)",
                 data: {
                     clientSecret: paymentIntent.client_secret,
-                    subscriptionId: subscription.id,
-                    orderId: order.id
+                    orderId: order.id,
+                    paymentIntentId: paymentIntent.id
                 }
             };
 
@@ -237,7 +239,7 @@ class PaymentService {
                 };
             }
 
-            if(user.clinicId !=clinicId){
+            if (user.clinicId != clinicId) {
                 return {
                     success: false,
                     message: "Forbidden",
