@@ -147,11 +147,7 @@ class UserService {
             const validation = this.validateUserForPatientCreation(user);
 
             if (!validation.valid) {
-                return {
-                    success: false,
-                    error: validation.errorMessage,
-                    missingFields: validation.missingFields
-                };
+                return null
             }
 
             const patientRequest = await this.mapUserToPatientRequest(user, addressId);
@@ -168,10 +164,7 @@ class UserService {
                         { where: { id: userId } }
                     );
                 }
-                return {
-                    success: true,
-                    message: "Patient created"
-                };
+
 
             } else {
                 // Update existing patient
@@ -179,18 +172,12 @@ class UserService {
                     parseInt(user.pharmacyPatientId),
                     patientRequest
                 );
-                return {
-                    success: true,
-                    message: "Patient updated"
-                };
             }
 
+            user.reload()
+            return user
         } catch (error) {
             console.error('Error syncing patient from user:', error);
-            return {
-                success: false,
-                error: error instanceof Error ? error.message : 'Unknown error occurred'
-            };
         }
     }
 
