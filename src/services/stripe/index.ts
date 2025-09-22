@@ -1,5 +1,6 @@
 import Stripe from 'stripe';
 import { stripe } from './config';
+import { BillingInterval } from '../../models/TreatmentPlan';
 
 const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:3000"
 
@@ -72,76 +73,118 @@ class StripeService {
   async createPaymentIntent(
     amount: number,
     currency: string = 'usd',
-    customerId?: string
+    customerId?: string,
+    metadata?: Record<string, string>
   ) {
-
-    return stripe.paymentIntents.create({
+    const paymentIntentParams: any = {
       amount: Math.round(amount * 100), // Convert to cents
       currency,
       customer: customerId,
+      capture_method: 'manual',
+      setup_future_usage: 'off_session', // Save payment method for future use
       automatic_payment_methods: {
         enabled: true,
       },
-    });
+      payment_method_options: {
+        card: {
+          setup_future_usage: 'off_session' // Ensure card is saved
+        }
+      },
+      metadata: metadata || {}
+    };
+
+    return stripe.paymentIntents.create(paymentIntentParams);
   }
 
-  async createSubscriptionWithPaymentIntent({
+  async capturePaymentIntent(paymentIntentId: string, amountToCapture?: number) {
+    const captureParams: any = {
+      expand: ['invoice']
+    };
+    if (amountToCapture) {
+      captureParams.amount_to_capture = Math.round(amountToCapture * 100);
+    }
+
+    return stripe.paymentIntents.capture(paymentIntentId, captureParams);
+  }
+
+
+  async createSubscriptionAfterPayment({
     customerId,
     priceId,
-    metadata
+    paymentMethodId,
+    metadata,
+    billingInterval = BillingInterval.MONTHLY,
   }: {
     customerId: string;
     priceId: string;
+    paymentMethodId: string;
     metadata?: Record<string, string>;
+    billingInterval?: BillingInterval;
   }) {
-    // Create subscription with payment behavior to create payment intent
-    const subscription = await stripe.subscriptions.create({
-      customer: customerId,
-      items: [{ price: priceId }],
-      payment_behavior: 'default_incomplete',
-      payment_settings: { save_default_payment_method: 'on_subscription' },
-      expand: ['latest_invoice'],
-      metadata: metadata || {}
-    });
+    try {
+      // Calculate next billing cycle anchor based on billing interval
+      const now = new Date();
+      let nextBillingDate: Date;
 
-    // Get the latest invoice
-    const invoice = subscription.latest_invoice as any;
-    
-    // Create a payment intent for the invoice if it doesn't exist
-    if (invoice && !invoice.payment_intent) {
-      const paymentIntent = await stripe.paymentIntents.create({
-        amount: invoice.amount_due,
-        currency: invoice.currency,
+      switch (billingInterval) {
+        case 'quarterly':
+          nextBillingDate = new Date(now);
+          nextBillingDate.setMonth(now.getMonth() + 3);
+          break;
+        case 'biannual':
+          nextBillingDate = new Date(now);
+          nextBillingDate.setMonth(now.getMonth() + 6);
+          break;
+        case 'annual':
+          nextBillingDate = new Date(now);
+          nextBillingDate.setFullYear(now.getFullYear() + 1);
+          break;
+        case 'monthly':
+        default:
+          nextBillingDate = new Date(now);
+          nextBillingDate.setMonth(now.getMonth() + 1);
+          break;
+      }
+
+      // Ensure we don't go past the end of the month for monthly billing
+      if (billingInterval === 'monthly' && nextBillingDate.getDate() !== now.getDate()) {
+        // Handle edge case for end-of-month dates (e.g., Jan 31 -> Feb 28)
+        nextBillingDate = new Date(nextBillingDate.getFullYear(), nextBillingDate.getMonth() + 1, 0);
+      }
+
+      const billingCycleAnchor = Math.floor(nextBillingDate.getTime() / 1000);
+
+      console.log(`📅 Setting subscription billing cycle anchor to: ${nextBillingDate.toISOString()} (${billingInterval} billing)`);
+
+      // Create subscription starting at next billing cycle
+      const subscription = await stripe.subscriptions.create({
         customer: customerId,
-        automatic_payment_methods: {
-          enabled: true,
+        items: [{ price: priceId }],
+        default_payment_method: paymentMethodId,
+        billing_cycle_anchor: billingCycleAnchor,
+        proration_behavior: 'none', // Don't prorate - start fresh next cycle
+        payment_settings: {
+          save_default_payment_method: 'on_subscription',
+          payment_method_types: ['card']
         },
         metadata: {
           ...metadata,
-          invoice_id: invoice.id,
-          subscription_id: subscription.id
+          initial_payment_covered: 'true',
+          next_billing_date: nextBillingDate.toISOString(),
+          billing_interval: billingInterval
         }
       });
-      
-      console.log('💳 Created payment intent:', {
-        id: paymentIntent.id,
-        client_secret: paymentIntent.client_secret,
-        amount: paymentIntent.amount,
-        status: paymentIntent.status
-      });
-      
-      // Return subscription with the payment intent attached
-      return {
-        ...subscription,
-        latest_invoice: {
-          ...invoice,
-          payment_intent: paymentIntent
-        }
-      };
-    }
 
-    return subscription;
+      console.log('✅ Subscription created after payment capture (next billing cycle):', subscription.id);
+      console.log(`📅 Next billing will occur on: ${nextBillingDate.toISOString()}`);
+
+      return subscription;
+    } catch (error) {
+      console.error('❌ Error creating subscription after payment:', error);
+      throw error;
+    }
   }
+
 
   // Product management methods
   async createProduct(params: Stripe.ProductCreateParams) {
