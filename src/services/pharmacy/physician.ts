@@ -1,12 +1,6 @@
 import axios, { AxiosResponse } from 'axios';
 import { config, PharmacyApiConfig, PharmacyApiResponse } from './config';
-
-interface PhysicianLicense {
-  state: string;
-  number: string;
-  type: string;
-  expires_on: string;
-}
+import { PhysicianLicense } from '../../models/Physician';
 
 interface CreatePhysicianRequest {
   first_name: string;
@@ -14,8 +8,6 @@ interface CreatePhysicianRequest {
   last_name: string;
   phone_number: string;
   email: string;
-  dea_number: string;
-  npi_number: string;
   street: string;
   street_2?: string;
   city: string;
@@ -24,70 +16,33 @@ interface CreatePhysicianRequest {
   licenses: PhysicianLicense[];
 }
 
-const mockPhysician = {
-  "data": {
-    "id": 1,
-    "email": "physician@someclinic.com",
-    "first_name": "JOHN",
-    "middle_name": null,
-    "last_name": "DOE",
-    "phone_number": "7778889999",
-    "first_and_last_name": "JOHN DOE",
-    "first_letter_of_last_name": "S",
-    "dea_number": "BB1388568",
-    "npi_number": "1234567891",
-    "licenses": [
-      {
-        "state": "Montana",
-        "number": "12345",
-        "type": "MEDICAL",
-        "expires_on": "2022-06-31",
-        "approved": 1,
-        "expired": false
-      }
-    ],
-    "links": {
-      "api": {
-        "show": {
-          "url": "https://portal.absoluterx.com/api/clinics/physicians/1?api_key=<api_key>",
-          "method": "GET",
-          "axios_method": "get"
-        },
-        "update": {
-          "url": "https://portal.absoluterx.com/api/clinics/physicians/1?api_key=<api_key>",
-          "method": "PUT",
-          "axios_method": "put"
-        }
-      }
-    }
-  }
-}
 
-class PhysicianService {
+
+class PharmacyPhysicianService {
   private config: PharmacyApiConfig;
 
   constructor() {
-    this.config = config
+    this.config = config;
   }
 
   async createPhysician(physicianData: CreatePhysicianRequest): Promise<PharmacyApiResponse> {
     try {
-      // const response: AxiosResponse = await axios.post(
-      //   `${this.config.baseUrl}/api/clinics/physicians`,
-      //   physicianData,
-      //   {
-      //     params: {
-      //       api_key: this.config.apiKey
-      //     },
-      //     headers: {
-      //       'Content-Type': 'application/json',
-      //     }
-      //   }
-      // );
+      const response: AxiosResponse = await axios.post(
+        `${this.config.baseUrl}/api/clinics/physicians`,
+        physicianData,
+        {
+          params: {
+            api_key: this.config.apiKey
+          },
+          headers: {
+            'Content-Type': 'application/json',
+          }
+        }
+      );
 
       return {
         success: true,
-        data: mockPhysician
+        data: response.data
       };
     } catch (error) {
       console.error('Error creating physician:', error);
@@ -109,22 +64,22 @@ class PhysicianService {
 
   async updatePhysician(physicianId: number, physicianData: CreatePhysicianRequest): Promise<PharmacyApiResponse> {
     try {
-      // const response: AxiosResponse = await axios.put(
-      //   `${this.config.baseUrl}/api/clinics/physicians/${physicianId}`,
-      //   physicianData,
-      //   {
-      //     params: {
-      //       api_key: this.config.apiKey
-      //     },
-      //     headers: {
-      //       'Content-Type': 'application/json',
-      //     }
-      //   }
-      // );
+      const response: AxiosResponse = await axios.put(
+        `${this.config.baseUrl}/api/clinics/physicians/${physicianId}`,
+        physicianData,
+        {
+          params: {
+            api_key: this.config.apiKey
+          },
+          headers: {
+            'Content-Type': 'application/json',
+          }
+        }
+      );
 
       return {
         success: true,
-        data: mockPhysician
+        data: response.data
       };
     } catch (error) {
       console.error('Error updating physician:', error);
@@ -145,7 +100,7 @@ class PhysicianService {
   }
 }
 
-export default PhysicianService;
+export default PharmacyPhysicianService;
 export {
   CreatePhysicianRequest,
   PhysicianLicense,
