@@ -134,7 +134,7 @@ class QuestionService {
         await this.validateQuestionOperation(question.stepId, userId);
 
         // Update question fields
-        const updatedQuestion = await question.update({
+        await question.update({
             ...(updateData.questionText !== undefined && { questionText: updateData.questionText }),
             ...(updateData.answerType !== undefined && { answerType: updateData.answerType }),
             ...(updateData.isRequired !== undefined && { isRequired: updateData.isRequired }),
@@ -147,7 +147,8 @@ class QuestionService {
         if (updateData.options) {
             // Delete existing options
             await QuestionOption.destroy({
-                where: { questionId: questionId }
+                where: { questionId: questionId },
+                force: true
             });
 
             // Create new options
