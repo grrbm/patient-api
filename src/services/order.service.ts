@@ -12,6 +12,7 @@ import UserService from "./user.service";
 import StripeService from "./stripe";
 import Subscription, { PaymentStatus } from "../models/Subscription";
 import TreatmentPlan from "../models/TreatmentPlan";
+import Physician from "../models/Physician";
 
 
 interface ListOrdersByClinicResult {
@@ -49,11 +50,6 @@ interface PaginationParams {
     limit?: number;
 }
 
-const PHARMACY_PHYSICIAN_ID = process.env.PHARMACY_PHYSICIAN_ID!
-
-if (!PHARMACY_PHYSICIAN_ID) {
-    throw Error("Missing PHARMACY_PHYSICIAN_ID")
-}
 
 class OrderService {
 
@@ -177,7 +173,7 @@ class OrderService {
         }
     }
 
-    async approveOrder(orderId: string) {
+    async approveOrder(orderId: string, physicianId: string) {
         // TODO: this method might need to be expanded to create Order items depending on the information approved in the prescription
         try {
             // Get order with all related data including shipping address
@@ -212,6 +208,11 @@ class OrderService {
                         model: TreatmentPlan,
                         as: 'treatmentPlan',
                         attributes: ['stripePriceId']
+                    },
+                    {
+                        model: Physician,
+                        as: 'physician',
+                        attributes: ['pharmacyPhysicianId']
                     }
 
                 ]
@@ -224,6 +225,9 @@ class OrderService {
                     error: "Order with the provided ID does not exist"
                 };
             }
+
+            await order.update({ physicianId: physicianId });
+            await order.reload();
 
 
             // Check if order can be approved (pending orders with payment intent can be captured)
@@ -289,7 +293,6 @@ class OrderService {
             }
 
 
-
             // Create pharmacy order using the new method
             const pharmacyOrderResult = await this.createPharmacyOrder(order);
 
@@ -337,10 +340,21 @@ class OrderService {
             medical_necessity: item.notes || "Prescribed treatment as part of patient care plan."
         }));
 
+
+        const pharmacyPhysicianId = order?.physician?.pharmacyPhysicianId
+
+
+        if (!pharmacyPhysicianId) {
+            return {
+                success: false,
+                message: "No physician associated with order",
+                error: "No physician associated with order",
+            };
+        }
         // Create pharmacy order
         const pharmacyResult = await this.pharmacyOrderService.createOrder({
             patient_id: parseInt(pharmacyPatientId),
-            physician_id: parseInt(PHARMACY_PHYSICIAN_ID),
+            physician_id: parseInt(pharmacyPhysicianId),
             ship_to_clinic: 0, // Ship to patient
             service_type: "two_day",
             signature_required: 1,

@@ -2926,10 +2926,10 @@ app.post("/webhook/orders", async (req, res) => {
       });
     }
 
-    const { orderId } = req.body;
+    const { orderId, physicianId } = req.body;
 
 
-    const result = await orderService.approveOrder(orderId);
+    const result = await orderService.approveOrder(orderId, physicianId);
 
     res.json(result);
   } catch (error) {
