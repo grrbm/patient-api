@@ -7,7 +7,7 @@ import Product from '../models/Product';
 import TreatmentProducts from '../models/TreatmentProducts';
 import ShippingAddress from '../models/ShippingAddress';
 import StripeService from './stripe';
-import { BillingInterval } from '../models/TreatmentPlan';
+import TreatmentPlan, { BillingInterval } from '../models/TreatmentPlan';
 
 interface SubscribeTreatmentResult {
     success: boolean;
@@ -97,6 +97,16 @@ class PaymentService {
                 };
             }
 
+            // Get treatment plan and validate
+            const treatmentPlan = await TreatmentPlan.findByPk(treatmentPlanId);
+            if (!treatmentPlan) {
+                return {
+                    success: false,
+                    message: "Treatment plan not found",
+                    error: "Treatment plan with the provided ID does not exist"
+                };
+            }
+
             // Validate treatment has Stripe data
             if (!treatment.stripeProductId || !treatment.stripePriceId) {
                 return {
@@ -120,8 +130,8 @@ class PaymentService {
             }
 
 
-            // Calculate order amount
-            const totalAmount = treatment.price;
+            // Calculate order amount from treatment plan
+            const totalAmount = treatmentPlan.price;
 
 
             const shippingAddress = await ShippingAddress.create({

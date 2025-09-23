@@ -76,8 +76,14 @@ class StripeService {
     customerId?: string,
     metadata?: Record<string, string>
   ) {
+    // Ensure minimum charge amount for USD (50 cents)
+    const minimumAmount = currency === 'usd' ? 0.50 : amount;
+    const finalAmount = Math.max(amount, minimumAmount);
+    
+    console.log(`💰 Payment amount: $${amount} -> $${finalAmount} (minimum: $${minimumAmount})`);
+    
     const paymentIntentParams: any = {
-      amount: Math.round(amount * 100), // Convert to cents
+      amount: Math.round(finalAmount * 100), // Convert to cents
       currency,
       customer: customerId,
       capture_method: 'manual',

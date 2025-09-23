@@ -83,9 +83,9 @@ export default class Order extends Entity {
 
   @Column({
     type: DataType.ENUM(...Object.values(BillingInterval)),
-    allowNull: false,
+    allowNull: true,
   })
-  declare billingInterval: BillingInterval;
+  declare billingInterval?: BillingInterval;
 
   @Column({
     type: DataType.DECIMAL(10, 2),
@@ -161,9 +161,9 @@ export default class Order extends Entity {
   @ForeignKey(() => ShippingAddress)
   @Column({
     type: DataType.UUID,
-    allowNull: false,
+    allowNull: true,
   })
-  declare shippingAddressId: string;
+  declare shippingAddressId?: string;
 
   @BelongsTo(() => ShippingAddress)
   declare shippingAddress: ShippingAddress;
