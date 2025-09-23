@@ -2945,7 +2945,7 @@ app.post("/webhook/orders", async (req, res) => {
 // Physicians endpoints
 app.post("/physicians", authenticateJWT, async (req, res) => {
   try {
-    
+
     const currentUser = getCurrentUser(req);
 
     if (!currentUser) {
@@ -2973,6 +2973,48 @@ app.post("/physicians", authenticateJWT, async (req, res) => {
     res.status(500).json({
       success: false,
       message: error instanceof Error ? error.message : "Failed to create physician"
+    });
+  }
+});
+
+app.put("/physicians", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "Not authenticated"
+      });
+    }
+
+    const { physicianId, ...updateData } = req.body;
+
+    if (!physicianId) {
+      return res.status(400).json({
+        success: false,
+        message: "physicianId is required"
+      });
+    }
+
+    const physicianService = new PhysicianService();
+
+    const physician = await physicianService.updatePhysician(physicianId, updateData, currentUser.id);
+
+    res.json({
+      success: true,
+      message: "Physician updated successfully",
+      data: {
+        id: physician.id,
+        fullName: physician.fullName,
+        email: physician.email,
+      }
+    });
+  } catch (error) {
+    console.error('Error updating physician:', error);
+    res.status(500).json({
+      success: false,
+      message: error instanceof Error ? error.message : "Failed to update physician"
     });
   }
 });
