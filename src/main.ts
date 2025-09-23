@@ -31,6 +31,7 @@ import QuestionnaireStepService from "./services/questionnaireStep.service";
 import QuestionService from "./services/question.service";
 import StripeService from "./services/stripe";
 import TreatmentPlanService from "./services/treatmentPlan.service";
+import PhysicianService from "./services/physician.service";
 
 // Helper function to generate unique clinic slug
 async function generateUniqueSlug(clinicName: string, excludeId?: string): Promise<string> {
@@ -2941,6 +2942,40 @@ app.post("/webhook/orders", async (req, res) => {
   }
 });
 
+// Physicians endpoints
+app.post("/physicians", authenticateJWT, async (req, res) => {
+  try {
+    
+    const currentUser = getCurrentUser(req);
+
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "Not authenticated"
+      });
+    }
+
+    const physicianService = new PhysicianService();
+
+    const physician = await physicianService.createPhysician(req.body, currentUser.id);
+
+    res.status(201).json({
+      success: true,
+      message: "Physician created successfully",
+      data: {
+        id: physician.id,
+        fullName: physician.fullName,
+        email: physician.email,
+      }
+    });
+  } catch (error) {
+    console.error('Error creating physician:', error);
+    res.status(500).json({
+      success: false,
+      message: error instanceof Error ? error.message : "Failed to create physician"
+    });
+  }
+});
 
 const PORT = process.env.PORT || 3001;
 
