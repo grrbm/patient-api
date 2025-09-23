@@ -2026,6 +2026,137 @@ app.post("/questionnaires/step", authenticateJWT, async (req, res) => {
   }
 });
 
+// Update questionnaire step
+app.put("/questionnaires/step", authenticateJWT, async (req, res) => {
+  try {
+    const { stepId, title, description } = req.body;
+    const currentUser = getCurrentUser(req);
+
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "Not authenticated"
+      });
+    }
+
+    // Validate required fields
+    if (!stepId) {
+      return res.status(400).json({
+        success: false,
+        message: "stepId is required"
+      });
+    }
+
+    // Validate at least one field to update is provided
+    if (title === undefined && description === undefined) {
+      return res.status(400).json({
+        success: false,
+        message: "At least one field (title or description) must be provided"
+      });
+    }
+
+    // Create questionnaire service instance
+    const questionnaireService = new QuestionnaireService();
+
+    // Update questionnaire step
+    const updatedStep = await questionnaireService.updateQuestionnaireStep(
+      stepId,
+      { title, description },
+      currentUser.id
+    );
+
+    console.log('✅ Questionnaire step updated:', {
+      stepId: updatedStep.id,
+      title: updatedStep.title,
+      description: updatedStep.description,
+      userId: currentUser.id
+    });
+
+    res.status(200).json({
+      success: true,
+      message: "Questionnaire step updated successfully",
+      data: updatedStep
+    });
+
+  } catch (error) {
+    console.error('❌ Error updating questionnaire step:', error);
+
+    if (error instanceof Error) {
+      if (error.message.includes('not found') ||
+          error.message.includes('does not belong to your clinic')) {
+        return res.status(404).json({
+          success: false,
+          message: error.message
+        });
+      }
+    }
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to update questionnaire step"
+    });
+  }
+});
+
+// Delete questionnaire step
+app.delete("/questionnaires/step", authenticateJWT, async (req, res) => {
+  try {
+    const { stepId } = req.body;
+    const currentUser = getCurrentUser(req);
+
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "Not authenticated"
+      });
+    }
+
+    // Validate required fields
+    if (!stepId) {
+      return res.status(400).json({
+        success: false,
+        message: "stepId is required"
+      });
+    }
+
+    // Create questionnaire service instance
+    const questionnaireService = new QuestionnaireService();
+
+    // Delete questionnaire step
+    const result = await questionnaireService.deleteQuestionnaireStep(stepId, currentUser.id);
+
+    console.log('✅ Questionnaire step deleted:', {
+      stepId: result.stepId,
+      deleted: result.deleted,
+      userId: currentUser.id
+    });
+
+    res.status(200).json({
+      success: true,
+      message: "Questionnaire step deleted successfully",
+      data: result
+    });
+
+  } catch (error) {
+    console.error('❌ Error deleting questionnaire step:', error);
+
+    if (error instanceof Error) {
+      if (error.message.includes('not found') ||
+          error.message.includes('does not belong to your clinic')) {
+        return res.status(404).json({
+          success: false,
+          message: error.message
+        });
+      }
+    }
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to delete questionnaire step"
+    });
+  }
+});
+
 // Update questionnaire steps order
 app.post("/questionnaires/step/order", authenticateJWT, async (req, res) => {
   try {

@@ -202,6 +202,64 @@ class QuestionnaireService {
 
     }
 
+    async updateQuestionnaireStep(stepId: string, updateData: { title?: string; description?: string }, userId: string) {
+        const step = await QuestionnaireStep.findByPk(stepId);
+        if (!step) {
+            throw new Error('Questionnaire step not found');
+        }
+
+        // Validate questionnaire operation permission
+        await this.validateQuestionnaireOperation(step.questionnaireId, userId);
+
+        // Update step with provided data
+        const updatedStep = await step.update({
+            ...(updateData.title !== undefined && { title: updateData.title }),
+            ...(updateData.description !== undefined && { description: updateData.description })
+        });
+
+        return updatedStep;
+    }
+
+    async deleteQuestionnaireStep(stepId: string, userId: string) {
+        const step = await QuestionnaireStep.findByPk(stepId, {
+            include: [
+                {
+                    model: Question,
+                    as: 'questions'
+                }
+            ]
+        });
+
+        if (!step) {
+            throw new Error('Questionnaire step not found');
+        }
+
+        // Validate questionnaire operation permission
+        await this.validateQuestionnaireOperation(step.questionnaireId, userId);
+
+        // Delete all questions associated with this step first
+        if (step.questions && step.questions.length > 0) {
+            for (const question of step.questions) {
+                // Delete question options first
+                await QuestionOption.destroy({
+                    where: { questionId: question.id }
+                });
+
+                // Then delete the question
+                await Question.destroy({
+                    where: { id: question.id }
+                });
+            }
+        }
+
+        // Delete the step
+        await QuestionnaireStep.destroy({
+            where: { id: stepId }
+        });
+
+        return { deleted: true, stepId };
+    }
+
     async saveStepsOrder(steps: Array<{ id: string; stepOrder: number }>, questionnaireId: string, userId: string) {
 
         if (!steps || !Array.isArray(steps) || steps.length === 0) {
