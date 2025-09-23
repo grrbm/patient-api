@@ -108,7 +108,7 @@ class PaymentService {
             }
 
             // Validate treatment has Stripe data
-            if (!treatment.stripeProductId || !treatment.stripePriceId) {
+            if (!treatment.stripeProductId) {
                 return {
                     success: false,
                     message: "Treatment not configured for subscriptions",

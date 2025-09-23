@@ -23,13 +23,6 @@ export default class Treatment extends Entity {
     })
     declare treatmentLogo: string;
 
-    @Column({
-        type: DataType.FLOAT,
-        allowNull: false,
-        defaultValue: 0,
-    })
-    declare price: number;
-
     // In here we will store the value of all the products in the treatment
     @Column({
         type: DataType.FLOAT,
@@ -52,11 +45,6 @@ export default class Treatment extends Entity {
     })
     declare stripeProductId?: string;
 
-    @Column({
-        type: DataType.STRING,
-        allowNull: true,
-    })
-    declare stripePriceId?: string;
 
 
     @ForeignKey(() => User)
