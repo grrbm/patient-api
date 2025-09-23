@@ -88,11 +88,11 @@ export default class User extends Entity {
   declare zipCode?: string;
 
   @Column({
-    type: DataType.ENUM('patient', 'doctor', 'admin'),
+    type: DataType.ENUM('patient', 'doctor', 'admin', 'brand'),
     allowNull: false,
     defaultValue: 'patient',
   })
-  declare role: 'patient' | 'doctor' | 'admin';
+  declare role: 'patient' | 'doctor' | 'admin' | 'brand';
 
   @Column({
     type: DataType.DATE,
