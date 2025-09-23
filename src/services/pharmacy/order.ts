@@ -83,118 +83,21 @@ class OrderService {
 
   async getOrder(orderId: number): Promise<PharmacyApiResponse> {
     try {
-      // const response: AxiosResponse = await axios.get(
-      //   `${this.config.baseUrl}/api/clinics/orders/${orderId}`,
-      //   {
-      //     params: {
-      //       api_key: this.config.apiKey
-      //     },
-      //     headers: {
-      //       'Content-Type': 'application/json',
-      //     }
-      //   }
-      // );
+      const response: AxiosResponse = await axios.get(
+        `${this.config.baseUrl}/api/clinics/orders/${orderId}`,
+        {
+          params: {
+            api_key: this.config.apiKey
+          },
+          headers: {
+            'Content-Type': 'application/json',
+          }
+        }
+      );
 
       return {
         success: true,
-        data: {
-          "number": 123456789,
-          "external_id": "test",
-          "status": "Pending",
-          "stage": "Filling",
-          "service_type": "two_day",
-          "filled_at": null,
-          "verified_at": null,
-          "shipped_at": null,
-          "created_at": "2022-01-21T13:25:09.000000Z",
-          "updated_at": "2022-01-21T13:25:09.000000Z",
-          "address": {
-            "full": "101 Some Street, Burleson, TX 76028 USA",
-            "street": "101 Some Street",
-            "street_2": null,
-            "city": "Burleson",
-            "state": "TX",
-            "zip": "76028",
-            "country": "USA"
-          },
-          "patient": {
-            "id": 1,
-            "first_name": "John",
-            "middle_name": "Michael",
-            "last_name": "Doe",
-            "formatted_name": "Doe, John Michael",
-            "email": "john@doe.com",
-            "dob": "1979-01-01",
-            "gender": "Male",
-            "phone_number": "7778889999",
-            "drivers_license_number": null,
-            "drivers_license_state": null,
-            "created_at": "2022-01-14T17:49:38.000000Z",
-            "updated_at": "2022-01-14T17:49:38.000000Z",
-            "deleted_at": null,
-            "allergies": [
-              {
-                "name": "Nuts"
-              }
-            ],
-            "diseases": [
-              {
-                "name": "None"
-              }
-            ],
-            "medications": [
-              {
-                "name": "Tylenol",
-                "strength": "500mg"
-              }
-            ],
-            "links": {
-              "api": {
-                "update": {
-                  "url": "https://portal.absoluterx.com/api/clinics/patients/1?api_key=<api_key>",
-                  "method": "PUT",
-                  "axios_method": "put"
-                }
-              }
-            }
-          },
-          "physician": {
-            "id": 1,
-            "email": null,
-            "first_name": "JANE",
-            "middle_name": null,
-            "last_name": "DOE",
-            "phone_number": "9998887777",
-            "first_and_last_name": "JANE DOE",
-            "first_letter_of_last_name": "D",
-            "dea_number": null,
-            "npi_number": "9876543211",
-            "links": {
-              "api": {
-                "show": {
-                  "url": "https://portal.absoluterx.com/api/clinics/physicians/1?api_key=<api_key>",
-                  "method": "GET",
-                  "axios_method": "get"
-                },
-                "update": {
-                  "url": "https://portal.absoluterx.com/api/clinics/physicians/1?api_key=<api_key>",
-                  "method": "PUT",
-                  "axios_method": "put"
-                }
-              }
-            }
-          },
-          "shipment": null,
-          "links": {
-            "api": {
-              "show": {
-                "url": "https://portal.absoluterx.com/api/clinics/orders/123456789?api_key=<api_key>",
-                "method": "GET",
-                "axios_method": "get"
-              }
-            }
-          }
-        }
+        data: response.data
       };
     } catch (error) {
       console.error('Error fetching pharmacy order:', error);
@@ -221,31 +124,19 @@ class OrderService {
         ...addressData
       };
 
-      // const response: AxiosResponse = await axios.put(
-      //   `${this.config.baseUrl}/api/clinics/orders/${orderId}/patient-address`,
-      //   requestData,
-      //   {
-      //     headers: {
-      //       'Content-Type': 'application/json',
-      //     }
-      //   }
-      // );
+      const response: AxiosResponse = await axios.put(
+        `${this.config.baseUrl}/api/clinics/orders/${orderId}/patient-address`,
+        requestData,
+        {
+          headers: {
+            'Content-Type': 'application/json',
+          }
+        }
+      );
 
       return {
         success: true,
-        data: {
-          "message": "Shipping address updated successfully",
-          "data": {
-            "order_id": 185081,
-            "full": "117 FOREST HILL DR, Richmond, KY, 40475",
-            "street": "117 FOREST HILL DR",
-            "street_2": null,
-            "city": "Richmond",
-            "state": "KY",
-            "zip": "40475",
-            "country": "US"
-          }
-        }
+        data: response.data
       };
     } catch (error) {
       console.error('Error updating patient address:', error);
@@ -267,17 +158,17 @@ class OrderService {
 
   async deleteOrder(orderId: number): Promise<PharmacyApiResponse> {
     try {
-      // const response: AxiosResponse = await axios.delete(
-      //   `${this.config.baseUrl}/api/clinics/orders/${orderId}`,
-      //   {
-      //     params: {
-      //       api_key: this.config.apiKey
-      //     },
-      //     headers: {
-      //       'Content-Type': 'application/json',
-      //     }
-      //   }
-      // );
+      const response: AxiosResponse = await axios.delete(
+        `${this.config.baseUrl}/api/clinics/orders/${orderId}`,
+        {
+          params: {
+            api_key: this.config.apiKey
+          },
+          headers: {
+            'Content-Type': 'application/json',
+          }
+        }
+      );
 
       // Orders can only be deleted (cancelled) as long as they have not been shipped.
       return {
