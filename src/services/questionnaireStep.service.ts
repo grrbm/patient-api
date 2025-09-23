@@ -122,17 +122,6 @@ class QuestionnaireStepService {
 
         // Get all step IDs to validate they exist and belong to the questionnaire
         const stepIds = steps.map(step => step.id);
-        const existingSteps = await QuestionnaireStep.findAll({
-            where: {
-                id: stepIds,
-                questionnaireId: questionnaireId
-            }
-        });
-
-        if (existingSteps.length !== steps.length) {
-            throw new Error('One or more steps not found or do not belong to the questionnaire');
-        }
-
         // Update step orders
         const updatePromises = steps.map(step =>
             QuestionnaireStep.update(
