@@ -28,6 +28,7 @@ import TreatmentPlan from "./models/TreatmentPlan";
 import ShippingOrder from "./models/ShippingOrder";
 import QuestionnaireService from "./services/questionnaire.service";
 import QuestionnaireStepService from "./services/questionnaireStep.service";
+import QuestionService from "./services/question.service";
 
 // Helper function to generate unique clinic slug
 async function generateUniqueSlug(clinicName: string, excludeId?: string): Promise<string> {
@@ -2080,7 +2081,7 @@ app.put("/questionnaires/step", authenticateJWT, async (req, res) => {
 
     if (error instanceof Error) {
       if (error.message.includes('not found') ||
-          error.message.includes('does not belong to your clinic')) {
+        error.message.includes('does not belong to your clinic')) {
         return res.status(404).json({
           success: false,
           message: error.message
@@ -2139,7 +2140,7 @@ app.delete("/questionnaires/step", authenticateJWT, async (req, res) => {
 
     if (error instanceof Error) {
       if (error.message.includes('not found') ||
-          error.message.includes('does not belong to your clinic')) {
+        error.message.includes('does not belong to your clinic')) {
         return res.status(404).json({
           success: false,
           message: error.message
@@ -2264,6 +2265,321 @@ app.get("/questionnaires/treatment/:treatmentId", async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Internal server error"
+    });
+  }
+});
+
+// Question routes
+// List questions in questionnaire step
+app.get("/questions/step/:stepId", authenticateJWT, async (req, res) => {
+  try {
+    const { stepId } = req.params;
+    const currentUser = getCurrentUser(req);
+
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "Not authenticated"
+      });
+    }
+
+    // Create question service instance
+    const questionService = new QuestionService();
+
+    // List questions
+    const questions = await questionService.listQuestions(stepId, currentUser.id);
+
+    console.log('✅ Questions listed for step:', {
+      stepId,
+      questionsCount: questions.length,
+      userId: currentUser.id
+    });
+
+    res.status(200).json({
+      success: true,
+      data: questions
+    });
+
+  } catch (error) {
+    console.error('❌ Error listing questions:', error);
+
+    if (error instanceof Error) {
+      if (error.message.includes('not found') ||
+        error.message.includes('does not belong to your clinic')) {
+        return res.status(404).json({
+          success: false,
+          message: error.message
+        });
+      }
+    }
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to list questions"
+    });
+  }
+});
+
+// Create question
+app.post("/questions", authenticateJWT, async (req, res) => {
+  try {
+    const { stepId, questionText, answerType, isRequired, placeholder, helpText, footerNote, options } = req.body;
+    const currentUser = getCurrentUser(req);
+
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "Not authenticated"
+      });
+    }
+
+    // Validate required fields
+    if (!stepId || !questionText || !answerType) {
+      return res.status(400).json({
+        success: false,
+        message: "stepId, questionText, and answerType are required"
+      });
+    }
+
+    // Create question service instance
+    const questionService = new QuestionService();
+
+    // Create question
+    const newQuestion = await questionService.createQuestion(
+      stepId,
+      { questionText, answerType, isRequired, placeholder, helpText, footerNote, options },
+      currentUser.id
+    );
+
+    console.log('✅ Question created:', {
+      questionId: newQuestion?.id,
+      questionText: newQuestion?.questionText,
+      stepId: newQuestion?.stepId,
+      userId: currentUser.id
+    });
+
+    res.status(201).json({
+      success: true,
+      message: "Question created successfully",
+      data: newQuestion
+    });
+
+  } catch (error) {
+    console.error('❌ Error creating question:', error);
+
+    if (error instanceof Error) {
+      if (error.message.includes('not found') ||
+        error.message.includes('does not belong to your clinic')) {
+        return res.status(404).json({
+          success: false,
+          message: error.message
+        });
+      }
+    }
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to create question"
+    });
+  }
+});
+
+// Update question
+app.put("/questions", authenticateJWT, async (req, res) => {
+  try {
+    const { questionId, questionText, answerType, isRequired, placeholder, helpText, footerNote, options } = req.body;
+    const currentUser = getCurrentUser(req);
+
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "Not authenticated"
+      });
+    }
+
+    // Validate required fields
+    if (!questionId) {
+      return res.status(400).json({
+        success: false,
+        message: "questionId is required"
+      });
+    }
+
+    // Create question service instance
+    const questionService = new QuestionService();
+
+    // Update question
+    const updatedQuestion = await questionService.updateQuestion(
+      questionId,
+      { questionText, answerType, isRequired, placeholder, helpText, footerNote, options },
+      currentUser.id
+    );
+
+    console.log('✅ Question updated:', {
+      questionId: updatedQuestion?.id,
+      questionText: updatedQuestion?.questionText,
+      userId: currentUser.id
+    });
+
+    res.status(200).json({
+      success: true,
+      message: "Question updated successfully",
+      data: updatedQuestion
+    });
+
+  } catch (error) {
+    console.error('❌ Error updating question:', error);
+
+    if (error instanceof Error) {
+      if (error.message.includes('not found') ||
+        error.message.includes('does not belong to your clinic')) {
+        return res.status(404).json({
+          success: false,
+          message: error.message
+        });
+      }
+    }
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to update question"
+    });
+  }
+});
+
+// Delete question
+app.delete("/questions", authenticateJWT, async (req, res) => {
+  try {
+    const { questionId } = req.body;
+    const currentUser = getCurrentUser(req);
+
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "Not authenticated"
+      });
+    }
+
+    // Validate required fields
+    if (!questionId) {
+      return res.status(400).json({
+        success: false,
+        message: "questionId is required"
+      });
+    }
+
+    // Create question service instance
+    const questionService = new QuestionService();
+
+    // Delete question
+    const result = await questionService.deleteQuestion(questionId, currentUser.id);
+
+    console.log('✅ Question deleted:', {
+      questionId: result.questionId,
+      deleted: result.deleted,
+      userId: currentUser.id
+    });
+
+    res.status(200).json({
+      success: true,
+      message: "Question deleted successfully",
+      data: result
+    });
+
+  } catch (error) {
+    console.error('❌ Error deleting question:', error);
+
+    if (error instanceof Error) {
+      if (error.message.includes('not found') ||
+        error.message.includes('does not belong to your clinic')) {
+        return res.status(404).json({
+          success: false,
+          message: error.message
+        });
+      }
+    }
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to delete question"
+    });
+  }
+});
+
+// Update questions order
+app.post("/questions/order", authenticateJWT, async (req, res) => {
+  try {
+    const { questions, stepId } = req.body;
+    const currentUser = getCurrentUser(req);
+
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "Not authenticated"
+      });
+    }
+
+    // Validate required fields
+    if (!questions || !Array.isArray(questions)) {
+      return res.status(400).json({
+        success: false,
+        message: "questions array is required"
+      });
+    }
+
+    if (!stepId) {
+      return res.status(400).json({
+        success: false,
+        message: "stepId is required"
+      });
+    }
+
+    // Validate questions array structure
+    for (const question of questions) {
+      if (!question.id || typeof question.questionOrder !== 'number') {
+        return res.status(400).json({
+          success: false,
+          message: "Each question must have id (string) and questionOrder (number)"
+        });
+      }
+    }
+
+    // Create question service instance
+    const questionService = new QuestionService();
+
+    // Save questions order
+    const updatedQuestions = await questionService.saveQuestionsOrder(questions, stepId, currentUser.id);
+
+    console.log('✅ Questions order updated:', {
+      questionsCount: updatedQuestions.length,
+      questionIds: updatedQuestions.map(q => q.id),
+      stepId,
+      userId: currentUser.id
+    });
+
+    res.status(200).json({
+      success: true,
+      message: "Questions order updated successfully",
+      data: updatedQuestions
+    });
+
+  } catch (error) {
+    console.error('❌ Error updating questions order:', error);
+
+    if (error instanceof Error) {
+      if (error.message.includes('not found') ||
+        error.message.includes('do not belong to your clinic') ||
+        error.message.includes('array is required')) {
+        return res.status(400).json({
+          success: false,
+          message: error.message
+        });
+      }
+    }
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to update questions order"
     });
   }
 });
