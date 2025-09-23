@@ -1062,6 +1062,16 @@ app.post("/treatments", authenticateJWT, async (req, res) => {
       treatmentLogo: ''
     });
 
+    const stripeService = new StripeService()
+
+    const stripeProduct = await stripeService.createProduct({
+      name: name.trim(),
+    })
+
+    treatment.update({
+      stripeProductId: stripeProduct.id
+    })
+
     console.log('💊 Treatment created:', { id: treatment.id, name: treatment.name });
 
     if (defaultQuestionnaire) {
