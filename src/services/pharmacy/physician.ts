@@ -16,6 +16,17 @@ interface CreatePhysicianRequest {
   licenses: PhysicianLicense[];
 }
 
+interface UpdatePhysicianRequest {
+  phone_number: string;
+  email: string;
+  street: string;
+  street_2?: string;
+  city: string;
+  state: string;
+  zip: string;
+  licenses: PhysicianLicense[];
+}
+
 
 
 class PharmacyPhysicianService {
@@ -62,7 +73,7 @@ class PharmacyPhysicianService {
     }
   }
 
-  async updatePhysician(physicianId: number, physicianData: CreatePhysicianRequest): Promise<PharmacyApiResponse> {
+  async updatePhysician(physicianId: number, physicianData: UpdatePhysicianRequest): Promise<PharmacyApiResponse> {
     try {
       const response: AxiosResponse = await axios.put(
         `${this.config.baseUrl}/api/clinics/physicians/${physicianId}`,

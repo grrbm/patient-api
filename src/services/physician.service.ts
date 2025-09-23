@@ -80,6 +80,17 @@ interface CreatePhysicianData {
     clinicId: string;
 }
 
+interface UpdatePhysicianData {
+    phoneNumber: string;
+    email: string;
+    street: string;
+    street2?: string;
+    city: string;
+    state: string; // Use state abbreviation (e.g., "FL")
+    zip: string;
+    licenses: PhysicianLicense[];
+}
+
 class PhysicianService {
     private pharmacyPhysicianService: PharmacyPhysicianService;
 
@@ -181,7 +192,70 @@ class PhysicianService {
 
         return physician;
     }
+
+    async updatePhysician(physicianId: string, updateData: UpdatePhysicianData, userId: string): Promise<Physician> {
+        // Validate user has admin role
+        const user = await User.findByPk(userId);
+        if (!user) {
+            throw new Error('User not found');
+        }
+
+        if (user.role !== 'admin') {
+            throw new Error('Only admin users can update physicians');
+        }
+
+        // Get physician
+        const physician = await Physician.findByPk(physicianId);
+        if (!physician) {
+            throw new Error('Physician not found');
+        }
+
+        // Convert state to abbreviation if needed
+        const stateAbbr = STATE_MAPPING[updateData.state] || updateData.state;
+
+        // Convert license states to abbreviations if needed
+        const normalizedLicenses = updateData.licenses.map(license => ({
+            ...license,
+            state: STATE_MAPPING[license.state] || license.state
+        }));
+
+        // Update physician in local database
+        await physician.update({
+            phoneNumber: updateData.phoneNumber,
+            email: updateData.email,
+            street: updateData.street,
+            street2: updateData.street2,
+            city: updateData.city,
+            state: stateAbbr,
+            zip: updateData.zip,
+            licenses: normalizedLicenses
+        });
+
+        // Update physician in pharmacy system if pharmacyPhysicianId exists
+        if (physician.pharmacyPhysicianId) {
+            const pharmacyResult = await this.pharmacyPhysicianService.updatePhysician(
+                parseInt(physician.pharmacyPhysicianId),
+                {
+                    phone_number: updateData.phoneNumber,
+                    email: updateData.email,
+                    street: updateData.street,
+                    street_2: updateData.street2,
+                    city: updateData.city,
+                    state: stateAbbr,
+                    zip: updateData.zip,
+                    licenses: normalizedLicenses
+                }
+            );
+
+            if (!pharmacyResult.success) {
+                console.warn('Failed to update physician in pharmacy system:', pharmacyResult.error);
+                // Continue with local update even if pharmacy update fails
+            }
+        }
+
+        return physician;
+    }
 }
 
 export default PhysicianService;
-export { CreatePhysicianData, PhysicianLicenseType };
+export { CreatePhysicianData, UpdatePhysicianData, PhysicianLicenseType };
