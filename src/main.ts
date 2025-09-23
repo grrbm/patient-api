@@ -30,6 +30,7 @@ import { processStripeWebhook } from "./services/stripe/webhook";
 import TreatmentProducts from "./models/TreatmentProducts";
 import TreatmentPlan from "./models/TreatmentPlan";
 import ShippingOrder from "./models/ShippingOrder";
+import QuestionnaireService from "./services/questionnaire.service";
 
 // Helper function to generate unique clinic slug
 async function generateUniqueSlug(clinicName: string, excludeId?: string): Promise<string> {
@@ -1020,7 +1021,7 @@ app.get("/treatments/by-clinic-id/:clinicId", authenticateJWT, async (req, res) 
 // Create new treatment
 app.post("/treatments", authenticateJWT, async (req, res) => {
   try {
-    const { name } = req.body;
+    const { name, defaultQuestionnaire } = req.body;
     const currentUser = getCurrentUser(req);
 
     if (!currentUser) {
@@ -1064,6 +1065,15 @@ app.post("/treatments", authenticateJWT, async (req, res) => {
     });
 
     console.log('💊 Treatment created:', { id: treatment.id, name: treatment.name });
+
+    if (defaultQuestionnaire) {
+      const questionnaireService = new QuestionnaireService()
+
+      console.log("Creating default questionnaire")
+      questionnaireService.createDefaultQuestionnaire(treatment.id)
+    }
+
+
 
     res.status(201).json({
       success: true,
@@ -1957,6 +1967,142 @@ app.post("/brand-subscriptions/cancel", authenticateJWT, async (req, res) => {
 });
 
 // Questionnaire routes
+// Add questionnaire step
+app.post("/questionnaires/step", authenticateJWT, async (req, res) => {
+  try {
+    const { questionnaireId } = req.body;
+    const currentUser = getCurrentUser(req);
+
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "Not authenticated"
+      });
+    }
+
+    // Validate required fields
+    if (!questionnaireId) {
+      return res.status(400).json({
+        success: false,
+        message: "treatmentId and questionnaireId are required"
+      });
+    }
+
+    // Create questionnaire service instance
+    const questionnaireService = new QuestionnaireService();
+
+    // Add new questionnaire step
+    const newStep = await questionnaireService.addQuestionnaireStep(questionnaireId, currentUser.id);
+
+    console.log('✅ Questionnaire step added:', {
+      stepId: newStep.id,
+      title: newStep.title,
+      stepOrder: newStep.stepOrder,
+      questionnaireId: newStep.questionnaireId
+    });
+
+    res.status(201).json({
+      success: true,
+      message: "Questionnaire step added successfully",
+      data: newStep
+    });
+
+  } catch (error) {
+    console.error('❌ Error adding questionnaire step:', error);
+
+    if (error instanceof Error) {
+      if (error.message.includes('not found') || error.message.includes('does not belong')) {
+        return res.status(404).json({
+          success: false,
+          message: error.message
+        });
+      }
+    }
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to add questionnaire step"
+    });
+  }
+});
+
+// Update questionnaire steps order
+app.post("/questionnaires/step/order", authenticateJWT, async (req, res) => {
+  try {
+    const { steps, questionnaireId } = req.body;
+    const currentUser = getCurrentUser(req);
+
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "Not authenticated"
+      });
+    }
+
+    // Validate required fields
+    if (!steps || !Array.isArray(steps)) {
+      return res.status(400).json({
+        success: false,
+        message: "steps array is required"
+      });
+    }
+
+    if (!questionnaireId) {
+      return res.status(400).json({
+        success: false,
+        message: "questionnaireId is required"
+      });
+    }
+
+    // Validate steps array structure
+    for (const step of steps) {
+      if (!step.id || typeof step.stepOrder !== 'number') {
+        return res.status(400).json({
+          success: false,
+          message: "Each step must have id (string) and stepOrder (number)"
+        });
+      }
+    }
+
+    // Create questionnaire service instance
+    const questionnaireService = new QuestionnaireService();
+
+    // Save steps order
+    const updatedSteps = await questionnaireService.saveStepsOrder(steps, questionnaireId, currentUser.id);
+
+    console.log('✅ Questionnaire steps order updated:', {
+      stepsCount: updatedSteps.length,
+      stepIds: updatedSteps.map(s => s.id),
+      userId: currentUser.id
+    });
+
+    res.status(200).json({
+      success: true,
+      message: "Questionnaire steps order updated successfully",
+      data: updatedSteps
+    });
+
+  } catch (error) {
+    console.error('❌ Error updating questionnaire steps order:', error);
+
+    if (error instanceof Error) {
+      if (error.message.includes('not found') ||
+        error.message.includes('do not belong to your clinic') ||
+        error.message.includes('array is required')) {
+        return res.status(400).json({
+          success: false,
+          message: error.message
+        });
+      }
+    }
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to update questionnaire steps order"
+    });
+  }
+});
+
 // Get questionnaire for a treatment
 app.get("/questionnaires/treatment/:treatmentId", async (req, res) => {
   try {
