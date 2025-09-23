@@ -1128,8 +1128,6 @@ app.put("/treatments", authenticateJWT, async (req, res) => {
       data: {
         id: treatment?.data?.id,
         name: treatment?.data?.name,
-        price: treatment?.data?.price,
-        productsPrice: treatment?.data?.productsPrice,
         treatmentLogo: treatment?.data?.treatmentLogo,
       }
     });

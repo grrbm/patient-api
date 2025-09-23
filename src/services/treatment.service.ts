@@ -28,9 +28,7 @@ interface UpdateTreatmentResult {
     data?: {
         id: string;
         name: string;
-        price: number;
         treatmentLogo: string;
-        productsPrice: number;
     };
     error?: string;
 }
@@ -265,9 +263,7 @@ class TreatmentService {
                 data: {
                     id: treatment.id,
                     name: treatment.name,
-                    price: treatment.price,
                     treatmentLogo: treatment.treatmentLogo,
-                    productsPrice: treatment.productsPrice
                 }
             };
 
