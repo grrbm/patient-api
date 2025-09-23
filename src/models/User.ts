@@ -209,7 +209,7 @@ export default class User extends Entity {
     lastName: string;
     email: string;
     password: string;
-    role?: 'patient' | 'doctor' | 'admin';
+    role?: 'patient' | 'doctor' | 'admin' | 'brand';
     dob?: string;
     phoneNumber?: string;
   }): Promise<User> {

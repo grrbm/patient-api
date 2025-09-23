@@ -121,7 +121,7 @@ app.use(cors({
         'https://unboundedhealth.xyz', // Add unboundedhealth.xyz
         'https://www.unboundedhealth.xyz'
       ]
-      : ['http://localhost:3000', 'http://3.140.178.30', 'https://unboundedhealth.xyz']; // Allow local frontend, your IP, and unboundedhealth.xyz during development
+      : ['http://localhost:3000', 'http://localhost:3002', 'http://localhost:3030', 'http://3.140.178.30', 'https://unboundedhealth.xyz']; // Allow local frontends, your IP, and unboundedhealth.xyz during development
 
     // Check if origin is in allowed list or matches patterns
     const isAllowed = allowedOrigins.includes(origin) ||
@@ -220,14 +220,24 @@ app.post("/auth/signup", async (req, res) => {
       console.log('🔗 Associating user with existing clinic ID:', clinicId);
     }
 
+    // Map frontend role to backend role
+    let mappedRole: 'patient' | 'doctor' | 'admin' | 'brand' = 'patient'; // default
+    if (role === 'provider') {
+      mappedRole = 'doctor';
+    } else if (role === 'admin') {
+      mappedRole = 'admin';
+    } else if (role === 'brand') {
+      mappedRole = 'brand';
+    }
+
     // Create new user in database
-    console.log('🚀 Creating new user with data:', { firstName, lastName, email, role: role === 'provider' ? 'doctor' : 'patient', dob: dateOfBirth, phoneNumber, finalClinicId });
+    console.log('🚀 Creating new user with data:', { firstName, lastName, email, role: mappedRole, dob: dateOfBirth, phoneNumber, finalClinicId });
     const user = await User.createUser({
       firstName,
       lastName,
       email,
       password,
-      role: role === 'provider' ? 'doctor' : 'patient', // Map frontend role to backend role
+      role: mappedRole,
       dob: dateOfBirth,
       phoneNumber,
     });
