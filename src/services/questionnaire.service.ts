@@ -152,6 +152,41 @@ class QuestionnaireService {
 
         return questionnaire;
     }
+
+    async getQuestionnaireByTreatment(treatmentId: string) {
+        const questionnaire = await Questionnaire.findOne({
+            where: { treatmentId },
+            include: [
+                {
+                    model: QuestionnaireStep,
+                    as: 'steps',
+                    include: [
+                        {
+                            model: Question,
+                            as: 'questions',
+                            include: [
+                                {
+                                    model: QuestionOption,
+                                    as: 'options'
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ],
+            order: [
+                [{ model: QuestionnaireStep, as: 'steps' }, 'stepOrder', 'ASC'],
+                [{ model: QuestionnaireStep, as: 'steps' }, { model: Question, as: 'questions' }, 'questionOrder', 'ASC'],
+                [{ model: QuestionnaireStep, as: 'steps' }, { model: Question, as: 'questions' }, { model: QuestionOption, as: 'options' }, 'optionOrder', 'ASC']
+            ]
+        });
+
+        if (!questionnaire) {
+            throw new Error('Questionnaire not found for this treatment');
+        }
+
+        return questionnaire;
+    }
 }
 
 export default QuestionnaireService;

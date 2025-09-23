@@ -9,10 +9,6 @@ import User from "./models/User";
 import Clinic from "./models/Clinic";
 import Treatment from "./models/Treatment";
 import Product from "./models/Product";
-import Questionnaire from "./models/Questionnaire";
-import QuestionnaireStep from "./models/QuestionnaireStep";
-import Question from "./models/Question";
-import QuestionOption from "./models/QuestionOption";
 import Order from "./models/Order";
 import OrderItem from "./models/OrderItem";
 import Payment from "./models/Payment";
@@ -2240,39 +2236,11 @@ app.get("/questionnaires/treatment/:treatmentId", async (req, res) => {
   try {
     const { treatmentId } = req.params;
 
-    const questionnaire = await Questionnaire.findOne({
-      where: { treatmentId },
-      include: [
-        {
-          model: QuestionnaireStep,
-          as: 'steps',
-          include: [
-            {
-              model: Question,
-              as: 'questions',
-              include: [
-                {
-                  model: QuestionOption,
-                  as: 'options'
-                }
-              ]
-            }
-          ]
-        }
-      ],
-      order: [
-        [{ model: QuestionnaireStep, as: 'steps' }, 'stepOrder', 'ASC'],
-        [{ model: QuestionnaireStep, as: 'steps' }, { model: Question, as: 'questions' }, 'questionOrder', 'ASC'],
-        [{ model: QuestionnaireStep, as: 'steps' }, { model: Question, as: 'questions' }, { model: QuestionOption, as: 'options' }, 'optionOrder', 'ASC']
-      ]
-    });
+    // Create questionnaire service instance
+    const questionnaireService = new QuestionnaireService();
 
-    if (!questionnaire) {
-      return res.status(404).json({
-        success: false,
-        message: "Questionnaire not found for this treatment"
-      });
-    }
+    // Get questionnaire by treatment
+    const questionnaire = await questionnaireService.getQuestionnaireByTreatment(treatmentId);
 
     console.log(`✅ Found questionnaire for treatment ID "${treatmentId}"`);
 
@@ -2283,6 +2251,16 @@ app.get("/questionnaires/treatment/:treatmentId", async (req, res) => {
 
   } catch (error) {
     console.error('❌ Error fetching questionnaire:', error);
+
+    if (error instanceof Error) {
+      if (error.message.includes('not found')) {
+        return res.status(404).json({
+          success: false,
+          message: error.message
+        });
+      }
+    }
+
     res.status(500).json({
       success: false,
       message: "Internal server error"
