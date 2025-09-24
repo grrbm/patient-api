@@ -4,6 +4,7 @@ import helmet from "helmet";
 import cors from "cors";
 import multer from "multer";
 import { initializeDatabase } from "./config/database";
+import { MailsSender } from "./services/mailsSender";
 import User from "./models/User";
 import Clinic from "./models/Clinic";
 import Treatment from "./models/Treatment";
@@ -252,14 +253,30 @@ app.post("/auth/signup", async (req, res) => {
     console.log('✅ User created successfully with ID:', user.id);
     console.log('👤 Created user details:', user.toSafeJSON());
 
-    // Pull user from database to confirm it was saved
-    const savedUser = await User.findByPk(user.id);
-    console.log('🔄 User pulled from database:', savedUser ? savedUser.toSafeJSON() : 'NOT FOUND');
+    // Generate activation token and send verification email
+    const activationToken = user.generateActivationToken();
+    await user.save();
+
+    console.log('🔑 Generated activation token for user:', user.email);
+
+    // Send verification email
+    const emailSent = await MailsSender.sendVerificationEmail(
+      user.email,
+      activationToken,
+      user.firstName
+    );
+
+    if (emailSent) {
+      console.log('📧 Verification email sent successfully');
+    } else {
+      console.log('❌ Failed to send verification email, but user was created');
+    }
 
     res.status(201).json({
       success: true,
-      message: "User registered successfully",
-      user: user.toSafeJSON() // Return safe user data
+      message: "User registered successfully. Please check your email to activate your account.",
+      user: user.toSafeJSON(), // Return safe user data
+      emailSent: emailSent
     });
 
   } catch (error: any) {
@@ -317,6 +334,15 @@ app.post("/auth/signin", async (req, res) => {
       });
     }
 
+    // Check if user account is activated
+    if (!user.activated) {
+      return res.status(401).json({
+        success: false,
+        message: "Please check your email and activate your account before signing in.",
+        needsActivation: true
+      });
+    }
+
     // Update last login time
     await user.updateLastLogin();
 
@@ -337,6 +363,74 @@ app.post("/auth/signin", async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Authentication failed. Please try again."
+    });
+  }
+});
+
+// Email verification endpoint
+app.get("/auth/verify-email", async (req, res) => {
+  try {
+    const { token } = req.query;
+
+    if (!token || typeof token !== 'string') {
+      return res.status(400).json({
+        success: false,
+        message: "Verification token is required"
+      });
+    }
+
+    // Find user with this activation token
+    const user = await User.findOne({
+      where: { 
+        activationToken: token 
+      }
+    });
+
+    if (!user) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid verification token"
+      });
+    }
+
+    // Check if token is valid and not expired
+    if (!user.isActivationTokenValid(token)) {
+      return res.status(400).json({
+        success: false,
+        message: "Verification token has expired. Please request a new one."
+      });
+    }
+
+    // Check if user is already activated
+    if (user.activated) {
+      return res.status(400).json({
+        success: false,
+        message: "Account is already activated"
+      });
+    }
+
+    // Activate the user
+    await user.activate();
+    console.log('✅ User activated successfully:', user.email);
+
+    // Send welcome email
+    await MailsSender.sendWelcomeEmail(user.email, user.firstName);
+
+    // Create JWT token for automatic login
+    const authToken = createJWTToken(user);
+
+    res.status(200).json({
+      success: true,
+      message: "Account activated successfully! You are now logged in.",
+      token: authToken,
+      user: user.toSafeJSON()
+    });
+
+  } catch (error) {
+    console.error('Email verification error occurred:', error);
+    res.status(500).json({
+      success: false,
+      message: "Verification failed. Please try again."
     });
   }
 });

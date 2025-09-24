@@ -101,6 +101,25 @@ export default class User extends Entity {
   declare lastLoginAt?: Date;
 
   @Column({
+    type: DataType.BOOLEAN,
+    allowNull: false,
+    defaultValue: false,
+  })
+  declare activated: boolean;
+
+  @Column({
+    type: DataType.STRING,
+    allowNull: true,
+  })
+  declare activationToken?: string;
+
+  @Column({
+    type: DataType.DATE,
+    allowNull: true,
+  })
+  declare activationTokenExpiresAt?: Date;
+
+  @Column({
     type: DataType.DATE,
     allowNull: true,
   })
@@ -231,5 +250,40 @@ export default class User extends Entity {
     return this.findOne({
       where: { email: email.toLowerCase().trim() }
     });
+  }
+
+  /**
+   * Generate and set activation token for email verification
+   */
+  public generateActivationToken(): string {
+    const crypto = require('crypto');
+    const token = crypto.randomBytes(32).toString('hex');
+    
+    this.activationToken = token;
+    // Token expires in 24 hours
+    this.activationTokenExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    
+    return token;
+  }
+
+  /**
+   * Activate user account
+   */
+  public async activate(): Promise<void> {
+    this.activated = true;
+    this.activationToken = undefined;
+    this.activationTokenExpiresAt = undefined;
+    await this.save();
+  }
+
+  /**
+   * Check if activation token is valid and not expired
+   */
+  public isActivationTokenValid(token: string): boolean {
+    if (!this.activationToken || !this.activationTokenExpiresAt) {
+      return false;
+    }
+    
+    return this.activationToken === token && this.activationTokenExpiresAt > new Date();
   }
 }
