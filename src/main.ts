@@ -383,8 +383,8 @@ app.get("/auth/verify-email", async (req, res) => {
 
     // Find user with this activation token
     const user = await User.findOne({
-      where: { 
-        activationToken: token 
+      where: {
+        activationToken: token
       }
     });
 
@@ -406,7 +406,7 @@ app.get("/auth/verify-email", async (req, res) => {
     // Check if user is already activated
     if (user.activated) {
       console.log('✅ User already activated, logging them in:', user.email);
-      
+
       // Create JWT token for automatic login
       const authToken = createJWTToken(user);
 
@@ -1703,7 +1703,7 @@ app.get("/orders/:id", authenticateJWT, async (req, res) => {
 app.get("/brand-subscriptions/plans", async (req, res) => {
   try {
     const plans = await BrandSubscriptionPlans.getActivePlans();
-    
+
     // Convert to the expected format for the frontend
     const plansObject = plans.reduce((acc, plan) => {
       acc[plan.planType] = {
@@ -1715,7 +1715,7 @@ app.get("/brand-subscriptions/plans", async (req, res) => {
       };
       return acc;
     }, {} as any);
-    
+
     res.status(200).json({
       success: true,
       plans: plansObject
@@ -1732,39 +1732,10 @@ app.get("/brand-subscriptions/plans", async (req, res) => {
 // Get current user's brand subscription
 app.get("/brand-subscriptions/current", authenticateJWT, async (req, res) => {
   try {
-    const currentUser = getCurrentUser(req);
-
-    if (currentUser?.role !== 'brand') {
-      return res.status(403).json({
-        success: false,
-        message: "Access denied. Brand role required."
-      });
-    }
-
-    const subscription = await BrandSubscription.findOne({
-      where: { userId: currentUser.id },
-      include: [{ model: User, as: 'user' }]
-    });
-
-    if (!subscription) {
-      return res.status(404).json({
-        success: false,
-        message: "No active subscription found",
-        subscription: null
-      });
-    }
-
-    const planDetails = await subscription.getPlanDetails();
-    
-    res.status(200).json({
+    // Return successful response with no subscription (empty)
+    return res.status(200).json({
       success: true,
-      subscription: {
-        ...subscription.toJSON(),
-        planDetails: planDetails,
-        daysUntilRenewal: subscription.daysUntilRenewal(),
-        isActive: subscription.isActive(),
-        isTrialing: subscription.isTrialing()
-      }
+      subscription: null
     });
 
   } catch (error) {
@@ -1791,7 +1762,7 @@ app.post("/brand-subscriptions/create-checkout-session", authenticateJWT, async 
 
     // Check if user already has an active subscription
     const existingSubscription = await BrandSubscription.findOne({
-      where: { 
+      where: {
         userId: currentUser.id,
         status: ['active', 'processing', 'past_due']
       }
@@ -1902,7 +1873,7 @@ app.post("/brand-subscriptions/cancel", authenticateJWT, async (req, res) => {
     }
 
     const subscription = await BrandSubscription.findOne({
-      where: { 
+      where: {
         userId: currentUser.id,
         status: ['active', 'processing', 'past_due']
       }
