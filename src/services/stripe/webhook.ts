@@ -26,7 +26,8 @@ export const handlePaymentIntentSucceeded = async (paymentIntent: Stripe.Payment
 
         console.log('✅ Order updated to paid status:', payment.order.orderNumber);
     } else {
-        console.error('❌ Payment record not found for payment intent:', paymentIntent.id);
+        // This is likely a subscription payment, not an order payment - ignore silently
+        console.log('ℹ️ Payment intent not associated with order (likely subscription):', paymentIntent.id);
     }
 };
 
@@ -103,9 +104,9 @@ export const handleCheckoutSessionCompleted = async (session: Stripe.Checkout.Se
             const user = await User.findByPk(userId);
             if (user && user.role === 'brand') {
                 console.log("Creating brand subscription for user:", userId);
-                
+
                 const selectedPlan = await BrandSubscriptionPlans.getPlanByType(planType as any);
-                
+
                 if (selectedPlan) {
                     const brandSub = await BrandSubscription.create({
                         userId: userId,
@@ -168,14 +169,23 @@ export const handleInvoicePaid = async (invoice: Stripe.Invoice): Promise<void> 
             const stripeService = new StripeService();
             try {
                 const stripeSubscription = await stripeService.getSubscription(subscriptionId);
-                
+
+                // Extract period dates safely  
+                const subscription = stripeSubscription as any; // Type assertion for Stripe subscription
+                const periodStart = subscription.current_period_start
+                    ? new Date(subscription.current_period_start * 1000)
+                    : new Date();
+                const periodEnd = subscription.current_period_end
+                    ? new Date(subscription.current_period_end * 1000)
+                    : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days from now
+
                 await brandSub.activate({
                     subscriptionId: subscriptionId,
-                    customerId: stripeSubscription.customer as string,
-                    currentPeriodStart: new Date((stripeSubscription as any).current_period_start * 1000),
-                    currentPeriodEnd: new Date((stripeSubscription as any).current_period_end * 1000)
+                    customerId: subscription.customer as string,
+                    currentPeriodStart: periodStart,
+                    currentPeriodEnd: periodEnd
                 });
-                
+
                 console.log('✅ Brand subscription activated:', brandSub.id);
             } catch (error) {
                 console.error('Error activating brand subscription:', error);
@@ -191,7 +201,7 @@ export const handleInvoicePaid = async (invoice: Stripe.Invoice): Promise<void> 
                 stripeSubscriptionId: subscriptionId
             }
         });
-        
+
         if (sub) {
             await sub.markSubAsPaid();
             console.log('✅ Subscription updated to paid:', sub.id);
@@ -203,7 +213,7 @@ export const handleInvoicePaid = async (invoice: Stripe.Invoice): Promise<void> 
                         status: PaymentStatus.PAID
                     })
                     // TODO: send a new order to pharmacy
-                    console.log("Sending new order ",  order.shippingOrders.length)
+                    console.log("Sending new order ", order.shippingOrders.length)
                 }
             }
             if (sub.clinicId) {
@@ -244,7 +254,7 @@ export const handleInvoicePaymentFailed = async (invoice: Stripe.Invoice): Promi
             try {
                 const subscriptionResponse = await stripeService.getSubscription(subscriptionId);
                 const validUntil = new Date((subscriptionResponse as any).current_period_end * 1000);
-                
+
                 await brandSub.markPaymentDue(validUntil);
                 console.log('⚠️ Brand subscription marked as payment due until:', validUntil.toISOString());
             } catch (error) {
@@ -325,7 +335,7 @@ export const handleSubscriptionDeleted = async (subscription: Stripe.Subscriptio
             stripeSubscriptionId: subscriptionId
         }
     });
-    
+
     if (sub) {
         await sub.markSubAsCanceled();
         console.log('✅ Subscription updated to canceled:', sub.id);
