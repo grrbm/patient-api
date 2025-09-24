@@ -8,6 +8,7 @@ import ShippingAddress from './ShippingAddress';
 import ShippingOrder from './ShippingOrder';
 import Subscription from './Subscription';
 import TreatmentPlan, { BillingInterval } from './TreatmentPlan';
+import Physician from './Physician';
 
 export enum OrderStatus {
   PENDING = 'pending',
@@ -73,6 +74,16 @@ export default class Order extends Entity {
 
   @BelongsTo(() => TreatmentPlan)
   declare treatmentPlan?: TreatmentPlan;
+
+  @ForeignKey(() => Physician)
+  @Column({
+    type: DataType.UUID,
+    allowNull: true,
+  })
+  declare physicianId?: string;
+
+  @BelongsTo(() => Physician)
+  declare physician?: Physician;
 
   @Column({
     type: DataType.ENUM(...Object.values(OrderStatus)),
