@@ -156,6 +156,13 @@ export const handleInvoicePaid = async (invoice: Stripe.Invoice): Promise<void> 
     const subItem = invoice?.lines?.data[0]
     const subscriptionId = (subItem?.subscription || subItem?.parent?.subscription_item_details?.subscription) as string
 
+    console.log('🔍 Invoice subscription ID from webhook:', subscriptionId);
+    console.log('🔍 Invoice details:', {
+        id: invoice.id,
+        customer: invoice.customer,
+        linesCount: invoice.lines?.data?.length
+    });
+
     if (subscriptionId && typeof subscriptionId === 'string') {
         // Check for brand subscription first
         const brandSub = await BrandSubscription.findOne({
@@ -163,6 +170,13 @@ export const handleInvoicePaid = async (invoice: Stripe.Invoice): Promise<void> 
                 stripeSubscriptionId: subscriptionId
             }
         });
+
+        console.log('🔍 Brand subscription found in DB:', brandSub ? {
+            id: brandSub.id,
+            stripeSubscriptionId: brandSub.stripeSubscriptionId,
+            status: brandSub.status,
+            userId: brandSub.userId
+        } : 'None');
 
         if (brandSub) {
             // Handle brand subscription payment
@@ -201,6 +215,14 @@ export const handleInvoicePaid = async (invoice: Stripe.Invoice): Promise<void> 
                 stripeSubscriptionId: subscriptionId
             }
         });
+
+        console.log('🔍 Regular subscription found in DB:', sub ? {
+            id: sub.id,
+            stripeSubscriptionId: sub.stripeSubscriptionId,
+            status: sub.status,
+            orderId: sub.orderId,
+            clinicId: sub.clinicId
+        } : 'None');
 
         if (sub) {
             await sub.markSubAsPaid();

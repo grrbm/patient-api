@@ -1548,27 +1548,70 @@ app.post("/payments/clinic/sub", authenticateJWT, async (req, res) => {
   }
 });
 
+// Webhook deduplication cache (in production, use Redis or database)
+const processedWebhooks = new Set<string>();
+
 // Stripe webhook endpoint
 app.post("/webhook/stripe", express.raw({ type: 'application/json' }), async (req, res) => {
   const sig = req.headers['stripe-signature'];
   const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
+
+  // Log webhook details for debugging
+  console.log('🔍 Webhook received - Signature:', sig);
+  console.log('🔍 Webhook received - Body length:', req.body?.length);
+  console.log('🔍 Webhook received - Body preview:', req.body?.toString().substring(0, 200) + '...');
+
+  // Extract timestamp from signature for deduplication
+  const sigString = Array.isArray(sig) ? sig[0] : sig;
+  const timestampMatch = sigString?.match(/t=(\d+)/);
+  const webhookTimestamp = timestampMatch ? timestampMatch[1] : null;
+  console.log('🔍 Webhook timestamp:', webhookTimestamp);
 
   if (!endpointSecret) {
     console.error('❌ STRIPE_WEBHOOK_SECRET not configured');
     return res.status(400).send('Webhook secret not configured');
   }
 
+  // Log webhook secret info (masked for security)
+  const secretPrefix = endpointSecret.substring(0, 10);
+  console.log('🔍 Using webhook secret:', secretPrefix + '...');
+  console.log('🔍 Webhook secret format check:', endpointSecret.startsWith('whsec_') ? '✅ Valid format' : '❌ Invalid format');
+
   let event;
 
   try {
     // Verify webhook signature
-    event = stripe.webhooks.constructEvent(req.body, sig!, endpointSecret);
+    const signature = Array.isArray(sig) ? sig[0] : sig;
+    if (!signature) {
+      throw new Error('No signature provided');
+    }
+    event = stripe.webhooks.constructEvent(req.body, signature, endpointSecret);
   } catch (err: any) {
     console.error('❌ Webhook signature verification failed:', err.message);
+    console.error('🔍 Debug - Signature header:', sig);
+    console.error('🔍 Debug - Endpoint secret configured:', !!endpointSecret);
+    console.error('🔍 Debug - Body type:', typeof req.body);
+    console.error('🔍 Debug - Body is buffer:', Buffer.isBuffer(req.body));
     return res.status(400).send(`Webhook Error: ${err.message}`);
   }
 
-  console.log('🎣 Stripe webhook event received:', event.type);
+  // Check for duplicate webhook events
+  const eventId = event.id;
+  if (processedWebhooks.has(eventId)) {
+    console.log('⚠️ Duplicate webhook event detected, skipping:', eventId);
+    return res.status(200).json({ received: true, duplicate: true });
+  }
+
+  // Add to processed webhooks (keep only last 1000 to prevent memory leaks)
+  processedWebhooks.add(eventId);
+  if (processedWebhooks.size > 1000) {
+    const firstEvent = processedWebhooks.values().next().value;
+    if (firstEvent) {
+      processedWebhooks.delete(firstEvent);
+    }
+  }
+
+  console.log('🎣 Stripe webhook event received:', event.type, 'ID:', eventId);
 
   try {
     // Process the event using the webhook service
