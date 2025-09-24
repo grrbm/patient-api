@@ -80,7 +80,7 @@ export async function initializeDatabase() {
 
     console.log("Syncing...")
     // Sync all models to database (alter: true will modify existing tables)
-    await sequelize.sync({ alter: { drop: false } });
+    await sequelize.sync({ alter: true });
     console.log('✅ Database tables synchronized successfully');
 
     return true;
