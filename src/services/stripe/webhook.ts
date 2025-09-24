@@ -7,6 +7,8 @@ import Clinic, { PaymentStatus } from '../../models/Clinic';
 import BrandSubscription, { BrandSubscriptionStatus } from '../../models/BrandSubscription';
 import User from '../../models/User';
 import BrandSubscriptionPlans from '../../models/BrandSubscriptionPlans';
+import OrderService from '../order.service';
+
 
 export const handlePaymentIntentSucceeded = async (paymentIntent: Stripe.PaymentIntent): Promise<void> => {
     console.log('💳 Payment succeeded:', paymentIntent.id);
@@ -234,8 +236,12 @@ export const handleInvoicePaid = async (invoice: Stripe.Invoice): Promise<void> 
                     await order.update({
                         status: PaymentStatus.PAID
                     })
-                    // TODO: send a new order to pharmacy
                     console.log("Sending new order ", order.shippingOrders.length)
+
+                    const orderService = new OrderService()
+
+                    const pharmacyOrder = orderService.createPharmacyOrder(order)
+                    console.log("Pharmacy order", pharmacyOrder)
                 }
             }
             if (sub.clinicId) {
