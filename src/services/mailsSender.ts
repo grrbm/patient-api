@@ -23,24 +23,39 @@ export class MailsSender {
    * Send a verification email to activate user account
    */
   static async sendVerificationEmail(email: string, activationToken: string, firstName: string): Promise<boolean> {
-    const activationUrl = `${process.env.FRONTEND_URL || 'http://localhost:3002'}/verify-email?token=${activationToken}`
+    // Determine the frontend URL based on environment
+    const getFrontendUrl = () => {
+      if (process.env.FRONTEND_URL) {
+        return process.env.FRONTEND_URL
+      }
+      
+      // Fallback based on NODE_ENV
+      if (process.env.NODE_ENV === 'production') {
+        return 'https://app.fuse.health'
+      }
+      
+      return 'http://localhost:3002'
+    }
+    
+    const activationUrl = `${getFrontendUrl()}/verify-email?token=${activationToken}`
+    console.log('🔗 Activation URL generated:', activationUrl)
 
     const msg: any = {
       to: email,
       from: this.FROM_EMAIL,
-      subject: 'Activate Your Rimo Brand Partner Account',
-      text: `Hello ${firstName},\n\nWelcome to Rimo! Please activate your brand partner account by clicking the link below:\n\n${activationUrl}\n\nThis link will expire in 24 hours.\n\nBest regards,\nThe Rimo Team`,
+      subject: 'Activate Your Fuse Brand Partner Account',
+      text: `Hello ${firstName},\n\nWelcome to Fuse! Please activate your brand partner account by clicking the link below:\n\n${activationUrl}\n\nThis link will expire in 24 hours.\n\nBest regards,\nThe Fuse Team`,
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
           <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; text-align: center;">
-            <h1 style="color: white; margin: 0; font-size: 28px;">Welcome to Rimo!</h1>
+            <h1 style="color: white; margin: 0; font-size: 28px;">Welcome to Fuse!</h1>
           </div>
           
           <div style="padding: 40px 30px; background-color: #f8f9fa;">
             <h2 style="color: #333; margin-top: 0;">Hello ${firstName},</h2>
             
             <p style="color: #666; font-size: 16px; line-height: 1.6;">
-              Thank you for signing up as a brand partner with Rimo. To complete your registration and access your dashboard, please activate your account by clicking the button below:
+              Thank you for signing up as a brand partner with Fuse. To complete your registration and access your dashboard, please activate your account by clicking the button below:
             </p>
             
             <div style="text-align: center; margin: 30px 0;">
@@ -71,7 +86,7 @@ export class MailsSender {
           <div style="background-color: #333; padding: 20px; text-align: center;">
             <p style="color: #ccc; margin: 0; font-size: 14px;">
               Best regards,<br>
-              The Rimo Team
+              The Fuse Team
             </p>
           </div>
         </div>
@@ -120,11 +135,26 @@ export class MailsSender {
    * Send welcome email after successful activation
    */
   static async sendWelcomeEmail(email: string, firstName: string): Promise<boolean> {
+    // Use same URL logic as verification email
+    const getFrontendUrl = () => {
+      if (process.env.FRONTEND_URL) {
+        return process.env.FRONTEND_URL
+      }
+      
+      if (process.env.NODE_ENV === 'production') {
+        return 'https://app.fuse.health'
+      }
+      
+      return 'http://localhost:3002'
+    }
+    
+    const frontendUrl = getFrontendUrl()
+    
     const msg = {
       to: email,
       from: this.FROM_EMAIL,
-      subject: 'Welcome to Rimo - Your Account is Active!',
-      text: `Hello ${firstName},\n\nYour brand partner account has been successfully activated! You can now access your dashboard and start managing your brand presence.\n\nLogin at: ${process.env.FRONTEND_URL || 'http://localhost:3002'}/signin\n\nBest regards,\nThe Rimo Team`,
+      subject: 'Welcome to Fuse - Your Account is Active!',
+      text: `Hello ${firstName},\n\nYour brand partner account has been successfully activated! You can now access your dashboard and start managing your brand presence.\n\nLogin at: ${frontendUrl}/signin\n\nBest regards,\nThe Fuse Team`,
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
           <div style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); padding: 30px; text-align: center;">
@@ -135,11 +165,11 @@ export class MailsSender {
             <h2 style="color: #333; margin-top: 0;">Hello ${firstName},</h2>
             
             <p style="color: #666; font-size: 16px; line-height: 1.6;">
-              Congratulations! Your Rimo brand partner account has been successfully activated. You now have full access to your dashboard and can start managing your brand presence.
+              Congratulations! Your Fuse brand partner account has been successfully activated. You now have full access to your dashboard and can start managing your brand presence.
             </p>
             
             <div style="text-align: center; margin: 30px 0;">
-              <a href="${process.env.FRONTEND_URL || 'http://localhost:3002'}/signin" 
+              <a href="${frontendUrl}/signin" 
                  style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); 
                         color: white; 
                         padding: 15px 30px; 
@@ -159,7 +189,7 @@ export class MailsSender {
           <div style="background-color: #333; padding: 20px; text-align: center;">
             <p style="color: #ccc; margin: 0; font-size: 14px;">
               Best regards,<br>
-              The Rimo Team
+              The Fuse Team
             </p>
           </div>
         </div>
