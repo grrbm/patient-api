@@ -45,6 +45,15 @@ export class MailsSender {
       from: this.FROM_EMAIL,
       subject: 'Activate Your Fuse Brand Partner Account',
       text: `Hello ${firstName},\n\nWelcome to Fuse! Please activate your brand partner account by clicking the link below:\n\n${activationUrl}\n\nThis link will expire in 24 hours.\n\nBest regards,\nThe Fuse Team`,
+      // Disable click tracking to prevent URL rewriting
+      trackingSettings: {
+        clickTracking: {
+          enable: false
+        },
+        openTracking: {
+          enable: false
+        }
+      },
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
           <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; text-align: center;">
@@ -150,11 +159,20 @@ export class MailsSender {
     
     const frontendUrl = getFrontendUrl()
     
-    const msg = {
+    const msg: any = {
       to: email,
       from: this.FROM_EMAIL,
       subject: 'Welcome to Fuse - Your Account is Active!',
       text: `Hello ${firstName},\n\nYour brand partner account has been successfully activated! You can now access your dashboard and start managing your brand presence.\n\nLogin at: ${frontendUrl}/signin\n\nBest regards,\nThe Fuse Team`,
+      // Disable click tracking to prevent URL rewriting
+      trackingSettings: {
+        clickTracking: {
+          enable: false
+        },
+        openTracking: {
+          enable: false
+        }
+      },
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
           <div style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); padding: 30px; text-align: center;">

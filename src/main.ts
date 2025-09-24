@@ -403,9 +403,16 @@ app.get("/auth/verify-email", async (req, res) => {
 
     // Check if user is already activated
     if (user.activated) {
-      return res.status(400).json({
-        success: false,
-        message: "Account is already activated"
+      console.log('✅ User already activated, logging them in:', user.email);
+      
+      // Create JWT token for automatic login
+      const authToken = createJWTToken(user);
+
+      return res.status(200).json({
+        success: true,
+        message: "Account is already activated! You are now logged in.",
+        token: authToken,
+        user: user.toSafeJSON()
       });
     }
 
