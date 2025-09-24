@@ -31,6 +31,7 @@ import TreatmentProducts from "./models/TreatmentProducts";
 import TreatmentPlan from "./models/TreatmentPlan";
 import ShippingOrder from "./models/ShippingOrder";
 import QuestionnaireService from "./services/questionnaire.service";
+import QuestionnaireStepService from "./services/questionnaireStep.service";
 
 // Helper function to generate unique clinic slug
 async function generateUniqueSlug(clinicName: string, excludeId?: string): Promise<string> {
@@ -1988,11 +1989,11 @@ app.post("/questionnaires/step", authenticateJWT, async (req, res) => {
       });
     }
 
-    // Create questionnaire service instance
-    const questionnaireService = new QuestionnaireService();
+    // Create questionnaire step service instance
+    const questionnaireStepService = new QuestionnaireStepService();
 
     // Add new questionnaire step
-    const newStep = await questionnaireService.addQuestionnaireStep(questionnaireId, currentUser.id);
+    const newStep = await questionnaireStepService.addQuestionnaireStep(questionnaireId, currentUser.id);
 
     console.log('✅ Questionnaire step added:', {
       stepId: newStep.id,
@@ -2055,11 +2056,11 @@ app.put("/questionnaires/step", authenticateJWT, async (req, res) => {
       });
     }
 
-    // Create questionnaire service instance
-    const questionnaireService = new QuestionnaireService();
+    // Create questionnaire step service instance
+    const questionnaireStepService = new QuestionnaireStepService();
 
     // Update questionnaire step
-    const updatedStep = await questionnaireService.updateQuestionnaireStep(
+    const updatedStep = await questionnaireStepService.updateQuestionnaireStep(
       stepId,
       { title, description },
       currentUser.id
@@ -2119,11 +2120,11 @@ app.delete("/questionnaires/step", authenticateJWT, async (req, res) => {
       });
     }
 
-    // Create questionnaire service instance
-    const questionnaireService = new QuestionnaireService();
+    // Create questionnaire step service instance
+    const questionnaireStepService = new QuestionnaireStepService();
 
     // Delete questionnaire step
-    const result = await questionnaireService.deleteQuestionnaireStep(stepId, currentUser.id);
+    const result = await questionnaireStepService.deleteQuestionnaireStep(stepId, currentUser.id);
 
     console.log('✅ Questionnaire step deleted:', {
       stepId: result.stepId,
@@ -2195,11 +2196,11 @@ app.post("/questionnaires/step/order", authenticateJWT, async (req, res) => {
       }
     }
 
-    // Create questionnaire service instance
-    const questionnaireService = new QuestionnaireService();
+    // Create questionnaire step service instance
+    const questionnaireStepService = new QuestionnaireStepService();
 
     // Save steps order
-    const updatedSteps = await questionnaireService.saveStepsOrder(steps, questionnaireId, currentUser.id);
+    const updatedSteps = await questionnaireStepService.saveStepsOrder(steps, questionnaireId, currentUser.id);
 
     console.log('✅ Questionnaire steps order updated:', {
       stepsCount: updatedSteps.length,
