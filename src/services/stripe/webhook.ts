@@ -4,6 +4,9 @@ import Order, { OrderStatus } from '../../models/Order';
 import StripeService from '.';
 import Subscription from '../../models/Subscription';
 import Clinic, { PaymentStatus } from '../../models/Clinic';
+import BrandSubscription, { BrandSubscriptionStatus } from '../../models/BrandSubscription';
+import User from '../../models/User';
+import BrandSubscriptionPlans from '../../models/BrandSubscriptionPlans';
 
 export const handlePaymentIntentSucceeded = async (paymentIntent: Stripe.PaymentIntent): Promise<void> => {
     console.log('💳 Payment succeeded:', paymentIntent.id);
@@ -88,20 +91,43 @@ export const handleCheckoutSessionCompleted = async (session: Stripe.Checkout.Se
 
     // Handle subscription checkout completion
     if (session.mode === 'subscription' && session.metadata) {
-        const { orderId, clinicId } = session.metadata;
+        const { orderId, clinicId, userId, planType } = session.metadata;
         const { subscription } = session;
 
         console.log(" subscription ", subscription)
 
         let createSub = false
 
+        // Handle brand subscription
+        if (userId && planType) {
+            const user = await User.findByPk(userId);
+            if (user && user.role === 'brand') {
+                console.log("Creating brand subscription for user:", userId);
+                
+                const selectedPlan = await BrandSubscriptionPlans.getPlanByType(planType as any);
+                
+                if (selectedPlan) {
+                    const brandSub = await BrandSubscription.create({
+                        userId: userId,
+                        planType: planType as any,
+                        status: BrandSubscriptionStatus.PROCESSING,
+                        stripeSubscriptionId: subscription as string,
+                        stripeCustomerId: session.customer as string,
+                        stripePriceId: selectedPlan.stripePriceId,
+                        monthlyPrice: selectedPlan.monthlyPrice
+                    });
+                    console.log('✅ Brand subscription created:', brandSub.id);
+                }
+                return; // Exit early for brand subscriptions
+            }
+        }
 
+        // Handle existing clinic/order subscriptions
         if (orderId) {
             const order = await Order.findByPk(orderId);
             if (order) {
                 createSub = true
                 console.log("Order found")
-
             }
         } else if (clinicId) {
             const clinic = await Clinic.findByPk(clinicId);
@@ -127,15 +153,45 @@ export const handleInvoicePaid = async (invoice: Stripe.Invoice): Promise<void> 
     console.log('Invoice paid:', invoice.id);
 
     const subItem = invoice?.lines?.data[0]
+    const subscriptionId = (subItem?.subscription || subItem?.parent?.subscription_item_details?.subscription) as string
 
-    const subscriptionId = subItem?.parent?.subscription_item_details?.subscription
+    if (subscriptionId && typeof subscriptionId === 'string') {
+        // Check for brand subscription first
+        const brandSub = await BrandSubscription.findOne({
+            where: {
+                stripeSubscriptionId: subscriptionId
+            }
+        });
 
-    if (subscriptionId) {
+        if (brandSub) {
+            // Handle brand subscription payment
+            const stripeService = new StripeService();
+            try {
+                const stripeSubscription = await stripeService.getSubscription(subscriptionId);
+                
+                await brandSub.activate({
+                    subscriptionId: subscriptionId,
+                    customerId: stripeSubscription.customer as string,
+                    currentPeriodStart: new Date((stripeSubscription as any).current_period_start * 1000),
+                    currentPeriodEnd: new Date((stripeSubscription as any).current_period_end * 1000)
+                });
+                
+                console.log('✅ Brand subscription activated:', brandSub.id);
+            } catch (error) {
+                console.error('Error activating brand subscription:', error);
+                // Fallback activation without period data
+                await brandSub.updateProcessing(subscriptionId);
+            }
+            return; // Exit early for brand subscriptions
+        }
+
+        // Handle existing clinic/order subscriptions
         const sub = await Subscription.findOne({
             where: {
                 stripeSubscriptionId: subscriptionId
             }
         });
+        
         if (sub) {
             await sub.markSubAsPaid();
             console.log('✅ Subscription updated to paid:', sub.id);
@@ -166,16 +222,39 @@ export const handleInvoicePaid = async (invoice: Stripe.Invoice): Promise<void> 
 export const handleInvoicePaymentFailed = async (invoice: Stripe.Invoice): Promise<void> => {
     console.log('❌ Invoice payment failed:', invoice.id);
 
-
-
-    // Get subscription ID directly from the invoice
     const subItem = invoice?.lines?.data[0]
-
-    const subscriptionId = subItem?.parent?.subscription_item_details?.subscription
+    const subscriptionId = (subItem?.subscription || subItem?.parent?.subscription_item_details?.subscription) as string
 
     const stripeService = new StripeService();
 
-    if (subscriptionId) {
+    if (subscriptionId && typeof subscriptionId === 'string') {
+        // Check for brand subscription first
+        const brandSub = await BrandSubscription.findOne({
+            where: {
+                stripeSubscriptionId: subscriptionId
+            }
+        });
+
+        if (brandSub) {
+            if (brandSub.status === BrandSubscriptionStatus.CANCELLED) {
+                console.warn('⚠️ Brand subscription has been cancelled', subscriptionId);
+                return;
+            }
+
+            try {
+                const subscriptionResponse = await stripeService.getSubscription(subscriptionId);
+                const validUntil = new Date((subscriptionResponse as any).current_period_end * 1000);
+                
+                await brandSub.markPaymentDue(validUntil);
+                console.log('⚠️ Brand subscription marked as payment due until:', validUntil.toISOString());
+            } catch (error) {
+                console.error('Error handling brand subscription payment failure:', error);
+                await brandSub.markPastDue();
+            }
+            return; // Exit early for brand subscriptions
+        }
+
+        // Handle existing clinic/order subscriptions
         const sub = await Subscription.findOne({
             where: {
                 stripeSubscriptionId: subscriptionId
@@ -183,7 +262,6 @@ export const handleInvoicePaymentFailed = async (invoice: Stripe.Invoice): Promi
         });
 
         if (sub) {
-
             if (sub.orderId) {
                 const order = await Order.findByPk(sub.orderId);
                 if (order) {
@@ -206,8 +284,7 @@ export const handleInvoicePaymentFailed = async (invoice: Stripe.Invoice): Promi
                 return
             }
 
-            const subscriptionResponse = await stripeService.getSubscription(subscriptionId);
-
+            const subscriptionResponse = await stripeService.getSubscription(subscriptionId as string);
             const currentPeriodEnd = subscriptionResponse.items.data[0]
 
             if (currentPeriodEnd?.current_period_end) {
@@ -217,7 +294,7 @@ export const handleInvoicePaymentFailed = async (invoice: Stripe.Invoice): Promi
                 console.log('⚠️ Subscription order marked as payment due until:', validUntil.toISOString());
             }
         } else {
-            console.warn('⚠️ No order found for failed subscription payment:', subscriptionId);
+            console.warn('⚠️ No subscription found for failed payment:', subscriptionId);
         }
     } else {
         console.warn('⚠️ No subscription ID found in failed invoice:', invoice.id);
@@ -229,12 +306,26 @@ export const handleSubscriptionDeleted = async (subscription: Stripe.Subscriptio
 
     const { id: subscriptionId } = subscription;
 
+    // Check for brand subscription first
+    const brandSub = await BrandSubscription.findOne({
+        where: {
+            stripeSubscriptionId: subscriptionId
+        }
+    });
 
+    if (brandSub) {
+        await brandSub.cancel();
+        console.log('✅ Brand subscription canceled:', brandSub.id);
+        return; // Exit early for brand subscriptions
+    }
+
+    // Handle existing clinic/order subscriptions
     const sub = await Subscription.findOne({
         where: {
             stripeSubscriptionId: subscriptionId
         }
     });
+    
     if (sub) {
         await sub.markSubAsCanceled();
         console.log('✅ Subscription updated to canceled:', sub.id);

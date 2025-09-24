@@ -14,7 +14,7 @@ if (!JWT_SECRET && process.env.NODE_ENV === 'production') {
 export interface JWTPayload {
   userId: string;
   userEmail: string;
-  userRole: 'patient' | 'provider' | 'admin';
+  userRole: 'patient' | 'provider' | 'admin' | 'brand';
   loginTime: number;
   iat?: number;
   exp?: number;

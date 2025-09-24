@@ -16,6 +16,8 @@ import Order from '../models/Order';
 import OrderItem from '../models/OrderItem';
 import Payment from '../models/Payment';
 import ShippingAddress from '../models/ShippingAddress';
+import BrandSubscription from '../models/BrandSubscription';
+import BrandSubscriptionPlans from '../models/BrandSubscriptionPlans';
 import ShippingOrder from '../models/ShippingOrder';
 import Subscription from '../models/Subscription';
 import TreatmentPlan from '../models/TreatmentPlan';
@@ -67,7 +69,7 @@ export const sequelize = new Sequelize(databaseUrl, {
     QuestionnaireStep, Question, QuestionOption,
     Order, OrderItem, Payment,
     ShippingAddress, ShippingOrder, Subscription,
-    TreatmentPlan
+    TreatmentPlan, BrandSubscription, BrandSubscriptionPlans
   ],
 });
 

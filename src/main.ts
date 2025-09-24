@@ -17,6 +17,8 @@ import Order from "./models/Order";
 import OrderItem from "./models/OrderItem";
 import Payment from "./models/Payment";
 import ShippingAddress from "./models/ShippingAddress";
+import BrandSubscription from "./models/BrandSubscription";
+import BrandSubscriptionPlans from "./models/BrandSubscriptionPlans";
 import { createJWTToken, authenticateJWT, getCurrentUser } from "./config/jwt";
 import { uploadToS3, deleteFromS3, isValidImageFile, isValidFileSize } from "./config/s3";
 import Stripe from "stripe";
@@ -1691,6 +1693,251 @@ app.get("/orders/:id", authenticateJWT, async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to fetch order"
+    });
+  }
+});
+
+// Brand Subscription routes
+
+// Get available subscription plans
+app.get("/brand-subscriptions/plans", async (req, res) => {
+  try {
+    const plans = await BrandSubscriptionPlans.getActivePlans();
+    
+    // Convert to the expected format for the frontend
+    const plansObject = plans.reduce((acc, plan) => {
+      acc[plan.planType] = {
+        name: plan.name,
+        price: parseFloat(plan.monthlyPrice.toString()),
+        features: plan.getFeatures(),
+        stripePriceId: plan.stripePriceId,
+        description: plan.description,
+      };
+      return acc;
+    }, {} as any);
+    
+    res.status(200).json({
+      success: true,
+      plans: plansObject
+    });
+  } catch (error) {
+    console.error('Error fetching subscription plans:', error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch subscription plans"
+    });
+  }
+});
+
+// Get current user's brand subscription
+app.get("/brand-subscriptions/current", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+
+    if (currentUser?.role !== 'brand') {
+      return res.status(403).json({
+        success: false,
+        message: "Access denied. Brand role required."
+      });
+    }
+
+    const subscription = await BrandSubscription.findOne({
+      where: { userId: currentUser.id },
+      include: [{ model: User, as: 'user' }]
+    });
+
+    if (!subscription) {
+      return res.status(404).json({
+        success: false,
+        message: "No active subscription found",
+        subscription: null
+      });
+    }
+
+    const planDetails = await subscription.getPlanDetails();
+    
+    res.status(200).json({
+      success: true,
+      subscription: {
+        ...subscription.toJSON(),
+        planDetails: planDetails,
+        daysUntilRenewal: subscription.daysUntilRenewal(),
+        isActive: subscription.isActive(),
+        isTrialing: subscription.isTrialing()
+      }
+    });
+
+  } catch (error) {
+    console.error('Error fetching brand subscription:', error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch subscription"
+    });
+  }
+});
+
+// Create brand subscription checkout session
+app.post("/brand-subscriptions/create-checkout-session", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+    const { planType, successUrl, cancelUrl } = req.body;
+
+    if (currentUser?.role !== 'brand') {
+      return res.status(403).json({
+        success: false,
+        message: "Access denied. Brand role required."
+      });
+    }
+
+    // Check if user already has an active subscription
+    const existingSubscription = await BrandSubscription.findOne({
+      where: { 
+        userId: currentUser.id,
+        status: ['active', 'processing', 'past_due']
+      }
+    });
+
+    if (existingSubscription) {
+      return res.status(400).json({
+        success: false,
+        message: "You already have an active subscription. Please cancel your current subscription before creating a new one."
+      });
+    }
+
+    const selectedPlan = await BrandSubscriptionPlans.getPlanByType(planType as any);
+
+    if (!selectedPlan) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid plan type"
+      });
+    }
+
+    // Get full user data from database
+    const user = await User.findByPk(currentUser.id);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found"
+      });
+    }
+
+    // Create or retrieve Stripe customer
+    let stripeCustomer;
+    try {
+      const customers = await stripe.customers.list({
+        email: currentUser.email,
+        limit: 1
+      });
+
+      if (customers.data.length > 0) {
+        stripeCustomer = customers.data[0];
+      } else {
+        stripeCustomer = await stripe.customers.create({
+          email: currentUser.email,
+          name: `${user.firstName} ${user.lastName}`,
+          metadata: {
+            userId: currentUser.id,
+            role: currentUser.role
+          }
+        });
+      }
+    } catch (error) {
+      console.error('Error creating Stripe customer:', error);
+      return res.status(500).json({
+        success: false,
+        message: "Failed to create payment customer"
+      });
+    }
+
+    // Create checkout session
+    const session = await stripe.checkout.sessions.create({
+      customer: stripeCustomer.id,
+      payment_method_types: ['card'],
+      line_items: [{
+        price: selectedPlan.stripePriceId,
+        quantity: 1,
+      }],
+      mode: 'subscription',
+      success_url: successUrl || `${process.env.FRONTEND_URL}/plans?success=true&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: cancelUrl || `${process.env.FRONTEND_URL}/plans?canceled=true`,
+      metadata: {
+        userId: currentUser.id,
+        planType: planType,
+        userEmail: currentUser.email
+      },
+      subscription_data: {
+        metadata: {
+          userId: currentUser.id,
+          planType: planType
+        }
+      }
+    });
+
+    res.status(200).json({
+      success: true,
+      sessionId: session.id,
+      url: session.url
+    });
+
+  } catch (error) {
+    console.error('Error creating checkout session:', error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to create checkout session"
+    });
+  }
+});
+
+// Cancel brand subscription
+app.post("/brand-subscriptions/cancel", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+
+    if (currentUser?.role !== 'brand') {
+      return res.status(403).json({
+        success: false,
+        message: "Access denied. Brand role required."
+      });
+    }
+
+    const subscription = await BrandSubscription.findOne({
+      where: { 
+        userId: currentUser.id,
+        status: ['active', 'processing', 'past_due']
+      }
+    });
+
+    if (!subscription) {
+      return res.status(404).json({
+        success: false,
+        message: "No active subscription found"
+      });
+    }
+
+    // Cancel subscription in Stripe
+    if (subscription.stripeSubscriptionId) {
+      try {
+        await stripe.subscriptions.cancel(subscription.stripeSubscriptionId);
+      } catch (stripeError) {
+        console.error('Error canceling Stripe subscription:', stripeError);
+        // Continue with local cancellation even if Stripe fails
+      }
+    }
+
+    // Cancel subscription in database
+    await subscription.cancel();
+
+    res.status(200).json({
+      success: true,
+      message: "Subscription canceled successfully"
+    });
+
+  } catch (error) {
+    console.error('Error canceling subscription:', error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to cancel subscription"
     });
   }
 });
