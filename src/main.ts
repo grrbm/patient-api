@@ -32,6 +32,7 @@ import QuestionService from "./services/question.service";
 import StripeService from "./services/stripe";
 import TreatmentPlanService from "./services/treatmentPlan.service";
 import PhysicianService from "./services/physician.service";
+import SubscriptionService from "./services/subscription.service";
 
 // Helper function to generate unique clinic slug
 async function generateUniqueSlug(clinicName: string, excludeId?: string): Promise<string> {
@@ -2207,6 +2208,80 @@ app.post("/brand-subscriptions/cancel", authenticateJWT, async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to cancel subscription"
+    });
+  }
+});
+
+// Upgrade subscriptions for a treatment to a new treatment plan
+app.post("/subscriptions/upgrade", authenticateJWT, async (req, res) => {
+  try {
+    const { treatmentId } = req.body;
+    const currentUser = getCurrentUser(req);
+    const userId = currentUser?.id;
+
+    if (!treatmentId) {
+      return res.status(400).json({
+        success: false,
+        message: "treatmentId is required"
+      });
+    }
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: "User authentication required"
+      });
+    }
+
+    const subscriptionService = new SubscriptionService();
+    await subscriptionService.upgradeSubscription(treatmentId, userId);
+
+    res.json({
+      success: true,
+      message: "Subscriptions upgraded successfully"
+    });
+  } catch (error) {
+    console.error('Error upgrading subscriptions:', error);
+    res.status(500).json({
+      success: false,
+      message: error instanceof Error ? error.message : "Failed to upgrade subscriptions"
+    });
+  }
+});
+
+// Cancel all subscriptions for a treatment
+app.post("/subscriptions/cancel", authenticateJWT, async (req, res) => {
+  try {
+    const { treatmentId } = req.body;
+    const currentUser = getCurrentUser(req);
+    const userId = currentUser?.id;
+
+    if (!treatmentId) {
+      return res.status(400).json({
+        success: false,
+        message: "treatmentId is required"
+      });
+    }
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: "User authentication required"
+      });
+    }
+
+    const subscriptionService = new SubscriptionService();
+    await subscriptionService.cancelSubscriptions(treatmentId, userId);
+
+    res.json({
+      success: true,
+      message: "Subscriptions cancelled successfully"
+    });
+  } catch (error) {
+    console.error('Error cancelling subscriptions:', error);
+    res.status(500).json({
+      success: false,
+      message: error instanceof Error ? error.message : "Failed to cancel subscriptions"
     });
   }
 });

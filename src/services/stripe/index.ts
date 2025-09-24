@@ -67,6 +67,10 @@ class StripeService {
     return stripe.subscriptions.retrieve(subscriptionId);
   }
 
+  async cancelSubscription(subscriptionId: string) {
+    return stripe.subscriptions.cancel(subscriptionId);
+  }
+
 
 
 
@@ -79,9 +83,9 @@ class StripeService {
     // Ensure minimum charge amount for USD (50 cents)
     const minimumAmount = currency === 'usd' ? 0.50 : amount;
     const finalAmount = Math.max(amount, minimumAmount);
-    
+
     console.log(`💰 Payment amount: $${amount} -> $${finalAmount} (minimum: $${minimumAmount})`);
-    
+
     const paymentIntentParams: any = {
       amount: Math.round(finalAmount * 100), // Convert to cents
       currency,
@@ -221,6 +225,29 @@ class StripeService {
   async deprecatePrice(priceId: string) {
     return stripe.prices.update(priceId, { active: false });
   }
+
+  async upgradeSubscriptionStripe({
+    stripeSubscriptionId,
+    stripeItemId,
+    stripePriceId,
+  }: {
+    stripeSubscriptionId: string;
+    stripeItemId: string;
+    stripePriceId: string;
+  }) {
+    return stripe.subscriptions.update(stripeSubscriptionId, {
+      items: [
+        {
+          id: stripeItemId,
+          deleted: true,
+        },
+        {
+          price: stripePriceId,
+        },
+      ],
+      proration_behavior: "none",
+    });
+  };
 
 }
 
