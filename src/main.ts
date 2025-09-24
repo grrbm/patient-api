@@ -29,6 +29,8 @@ import ShippingOrder from "./models/ShippingOrder";
 import QuestionnaireService from "./services/questionnaire.service";
 import QuestionnaireStepService from "./services/questionnaireStep.service";
 import QuestionService from "./services/question.service";
+import StripeService from "./services/stripe";
+import TreatmentPlanService from "./services/treatmentPlan.service";
 
 // Helper function to generate unique clinic slug
 async function generateUniqueSlug(clinicName: string, excludeId?: string): Promise<string> {
@@ -1103,9 +1105,9 @@ app.post("/treatments", authenticateJWT, async (req, res) => {
 });
 
 // Update treatment
-app.put("/treatments/:id", authenticateJWT, async (req, res) => {
+app.put("/treatments", authenticateJWT, async (req, res) => {
   try {
-    const { id } = req.params;
+    const { treatmentId } = req.body;
 
     const currentUser = getCurrentUser(req);
 
@@ -1117,7 +1119,7 @@ app.put("/treatments/:id", authenticateJWT, async (req, res) => {
     }
 
 
-    const treatment = await treatmentService.updateTreatment(id, req.body, currentUser.id)
+    const treatment = await treatmentService.updateTreatment(treatmentId, req.body, currentUser.id)
 
 
     res.status(200).json({
@@ -1182,6 +1184,242 @@ app.get("/treatments/:id", async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to fetch treatment"
+    });
+  }
+});
+
+// Treatment Plan routes
+// List treatment plans for a treatment
+app.get("/treatment-plans/treatment/:treatmentId", authenticateJWT, async (req, res) => {
+  try {
+    const { treatmentId } = req.params;
+    const currentUser = getCurrentUser(req);
+
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "Not authenticated"
+      });
+    }
+
+    // Create treatment plan service instance
+    const treatmentPlanService = new TreatmentPlanService();
+
+    // List treatment plans
+    const treatmentPlans = await treatmentPlanService.listTreatmentPlans(treatmentId, currentUser.id);
+
+    console.log('✅ Treatment plans listed:', {
+      treatmentId,
+      plansCount: treatmentPlans.length,
+      userId: currentUser.id
+    });
+
+    res.status(200).json({
+      success: true,
+      data: treatmentPlans
+    });
+
+  } catch (error) {
+    console.error('❌ Error listing treatment plans:', error);
+
+    if (error instanceof Error) {
+      if (error.message.includes('not found') ||
+          error.message.includes('does not belong to your clinic')) {
+        return res.status(404).json({
+          success: false,
+          message: error.message
+        });
+      }
+    }
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to list treatment plans"
+    });
+  }
+});
+
+// Create treatment plan
+app.post("/treatment-plans", authenticateJWT, async (req, res) => {
+  try {
+    const { name, description, billingInterval, price, active, popular, sortOrder, treatmentId } = req.body;
+    const currentUser = getCurrentUser(req);
+
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "Not authenticated"
+      });
+    }
+
+    // Validate required fields
+    if (!name || !billingInterval || price === undefined || !treatmentId) {
+      return res.status(400).json({
+        success: false,
+        message: "name, billingInterval, price, and treatmentId are required"
+      });
+    }
+
+    // Create treatment plan service instance
+    const treatmentPlanService = new TreatmentPlanService();
+
+    // Create treatment plan
+    const newTreatmentPlan = await treatmentPlanService.createTreatmentPlan(
+      { name, description, billingInterval, price, active, popular, sortOrder, treatmentId },
+      currentUser.id
+    );
+
+    console.log('✅ Treatment plan created:', {
+      planId: newTreatmentPlan.id,
+      name: newTreatmentPlan.name,
+      treatmentId: newTreatmentPlan.treatmentId,
+      userId: currentUser.id
+    });
+
+    res.status(201).json({
+      success: true,
+      message: "Treatment plan created successfully",
+      data: newTreatmentPlan
+    });
+
+  } catch (error) {
+    console.error('❌ Error creating treatment plan:', error);
+
+    if (error instanceof Error) {
+      if (error.message.includes('not found') ||
+          error.message.includes('does not belong to your clinic')) {
+        return res.status(404).json({
+          success: false,
+          message: error.message
+        });
+      }
+    }
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to create treatment plan"
+    });
+  }
+});
+
+// Update treatment plan
+app.put("/treatment-plans", authenticateJWT, async (req, res) => {
+  try {
+    const { planId, name, description, billingInterval, price, active, popular, sortOrder } = req.body;
+    const currentUser = getCurrentUser(req);
+
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "Not authenticated"
+      });
+    }
+
+    // Validate required fields
+    if (!planId) {
+      return res.status(400).json({
+        success: false,
+        message: "planId is required"
+      });
+    }
+
+    // Create treatment plan service instance
+    const treatmentPlanService = new TreatmentPlanService();
+
+    // Update treatment plan
+    const updatedTreatmentPlan = await treatmentPlanService.updateTreatmentPlan(
+      planId,
+      { name, description, billingInterval, price, active, popular, sortOrder },
+      currentUser.id
+    );
+
+    console.log('✅ Treatment plan updated:', {
+      planId: updatedTreatmentPlan.id,
+      name: updatedTreatmentPlan.name,
+      userId: currentUser.id
+    });
+
+    res.status(200).json({
+      success: true,
+      message: "Treatment plan updated successfully",
+      data: updatedTreatmentPlan
+    });
+
+  } catch (error) {
+    console.error('❌ Error updating treatment plan:', error);
+
+    if (error instanceof Error) {
+      if (error.message.includes('not found') ||
+          error.message.includes('does not belong to your clinic')) {
+        return res.status(404).json({
+          success: false,
+          message: error.message
+        });
+      }
+    }
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to update treatment plan"
+    });
+  }
+});
+
+// Delete treatment plan
+app.delete("/treatment-plans", authenticateJWT, async (req, res) => {
+  try {
+    const { planId } = req.body;
+    const currentUser = getCurrentUser(req);
+
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "Not authenticated"
+      });
+    }
+
+    // Validate required fields
+    if (!planId) {
+      return res.status(400).json({
+        success: false,
+        message: "planId is required"
+      });
+    }
+
+    // Create treatment plan service instance
+    const treatmentPlanService = new TreatmentPlanService();
+
+    // Delete treatment plan
+    const result = await treatmentPlanService.deleteTreatmentPlan(planId, currentUser.id);
+
+    console.log('✅ Treatment plan deleted:', {
+      planId: result.planId,
+      deleted: result.deleted,
+      userId: currentUser.id
+    });
+
+    res.status(200).json({
+      success: true,
+      message: "Treatment plan deleted successfully",
+      data: result
+    });
+
+  } catch (error) {
+    console.error('❌ Error deleting treatment plan:', error);
+
+    if (error instanceof Error) {
+      if (error.message.includes('not found') ||
+          error.message.includes('does not belong to your clinic')) {
+        return res.status(404).json({
+          success: false,
+          message: error.message
+        });
+      }
+    }
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to delete treatment plan"
     });
   }
 });
