@@ -162,6 +162,26 @@ class UserService {
         return 2; // cell phone
     }
 
+    private formatPhoneNumberToUS(phoneNumber: string): string {
+        // Remove all non-digit characters
+        const digits = phoneNumber.replace(/[^0-9]/g, '');
+
+        // Handle different input formats
+        if (digits.length === 10) {
+            // Format: 1234567890 -> (123) 456-7890 format
+            return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+        } else if (digits.length === 11 && digits.startsWith('1')) {
+            // Format: 11234567890 -> (123) 456-7890 format (remove country code)
+            const areaCode = digits.slice(1, 4);
+            const exchange = digits.slice(4, 7);
+            const number = digits.slice(7);
+            return `(${areaCode}) ${exchange}-${number}`;
+        } else {
+            // Fallback: use original format if can't parse correctly
+            return phoneNumber;
+        }
+    }
+
     async mapUserToMDPatientRequest(user: User, addressId?: string) {
         let address;
 
@@ -198,7 +218,7 @@ class UserService {
             email: user.email!,
             date_of_birth: user.dob!,
             gender: this.mapGenderToMDFormat(user.gender!),
-            phone_number: user.phoneNumber!.replace(/[^0-9]/g, ''),
+            phone_number: this.formatPhoneNumberToUS(user.phoneNumber!),
             phone_type: this.validatePhoneTypeForMD(),
             address: address,
             allergies: user.allergies?.map(allergy => allergy.name).join(', ') || '',
@@ -328,7 +348,7 @@ class UserService {
 
     async verifyUserAccount(userId: string) {
         try {
-    
+
             // Get user to check if they have mdPatientId
             const user = await getUser(userId);
             if (!user || !user.mdPatientId) {
