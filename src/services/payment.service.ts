@@ -8,6 +8,7 @@ import TreatmentProducts from '../models/TreatmentProducts';
 import ShippingAddress from '../models/ShippingAddress';
 import StripeService from './stripe';
 import TreatmentPlan, { BillingInterval } from '../models/TreatmentPlan';
+import Payment from '../models/Payment';
 
 interface SubscribeTreatmentResult {
     success: boolean;
@@ -202,6 +203,16 @@ class PaymentService {
             await order.update({
                 paymentIntentId: paymentIntent.id,
                 stripePriceId: stripePriceId
+            });
+
+            // Create payment record
+            await Payment.create({
+                orderId: order.id,
+                stripePaymentIntentId: paymentIntent.id,
+                status: 'pending',
+                paymentMethod: 'card',
+                amount: totalAmount,
+                currency: 'usd'
             });
 
             return {
