@@ -33,6 +33,8 @@ import StripeService from "./services/stripe";
 import TreatmentPlanService from "./services/treatmentPlan.service";
 import PhysicianService from "./services/physician.service";
 import MDWebhookService from "./services/mdIntegration/MDWebhook.service";
+import MDPatientService from "./services/mdIntegration/MDPatient.service";
+import MDAuthService from "./services/mdIntegration/MDAuth.service";
 
 // Helper function to generate unique clinic slug
 async function generateUniqueSlug(clinicName: string, excludeId?: string): Promise<string> {
@@ -3625,6 +3627,77 @@ const userService = new UserService();
 const treatmentService = new TreatmentService();
 const orderService = new OrderService();
 
+
+// Check the status 
+app.get("/patient/verify-account", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "Not authenticated"
+      });
+    }
+
+    const verified = await userService.isUserVerified(currentUser.id);
+
+    res.status(200).json({ verified });
+
+  } catch (error) {
+    console.error('❌ Error updating patient:', error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error"
+    });
+  }
+});
+
+app.post("/patient/verify-account", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "Not authenticated"
+      });
+    }
+
+    // Get user to check if they have mdPatientId
+    const user = await User.findByPk(currentUser.id);
+    if (!user || !user.mdPatientId) {
+      return res.status(400).json({
+        success: false,
+        message: "User not synced with MD Integration. Please try updating your profile first."
+      });
+    }
+
+    // Get MD Integration access token and retrieve driver's license info
+    const tokenResponse = await MDAuthService.generateToken();
+    const driversLicenseData = await MDPatientService.getDriversLicense(
+      user.mdPatientId,
+      tokenResponse.access_token
+    );
+
+    res.status(200).json({
+      success: true,
+      message: "Account verification data retrieved successfully",
+      data: {
+        drivers_license_url: driversLicenseData.drivers_license_url,
+        verification_code: driversLicenseData.verification_code,
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Error verifying patient account:', error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: error instanceof Error ? error.message : 'Unknown error occurred'
+    });
+  }
+});
 
 app.put("/patient", authenticateJWT, async (req, res) => {
   try {
