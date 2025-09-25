@@ -5,6 +5,7 @@ import MDCaseService from './MDCase.service';
 import MDClinicianService from './MDClinician.service';
 import Physician from '../../models/Physician';
 import PharmacyPhysicianService from '../pharmacy/physician';
+import User from '../../models/User';
 
 
 interface Product {
@@ -68,8 +69,23 @@ interface OfferingSubmittedEvent {
   offerings: Offering[];
 }
 
+interface IntroVideoRequestedEvent {
+  event_type: 'intro_video_requested';
+  access_link: string;
+  patient_id: string;
+  metadata: string;
+}
+
+interface DriversLicenseRequestedEvent {
+  timestamp: number;
+  event_type: 'drivers_license_requested';
+  access_link: string;
+  patient_id: string;
+  metadata: string;
+}
+
 class MDWebhookService {
-// This event will be dispatched when a treatment is approved and ready to be ordered, depending on the offering type:
+  // This event will be dispatched when a treatment is approved and ready to be ordered, depending on the offering type:
   async handleOfferingSubmitted(eventData: OfferingSubmittedEvent): Promise<void> {
     console.log('🩺 MD Integration offering submitted:', eventData.case_id);
 
@@ -190,10 +206,86 @@ class MDWebhookService {
     }
   }
 
+  async handleIntroVideoRequested(eventData: IntroVideoRequestedEvent): Promise<void> {
+    console.log('🎥 MD Integration intro video requested:', eventData.patient_id);
+
+    try {
+      // Find user by mdPatientId
+      const user = await User.findOne({
+        where: { mdPatientId: eventData.patient_id }
+      });
+
+      if (!user) {
+        console.log('⚠️ User not found for MD patient ID:', eventData.patient_id);
+        return;
+      }
+
+      console.log('✅ Processing intro video request for user:', user.id);
+
+
+
+      console.log('📋 Intro video details:', {
+        userId: user.id,
+        patientId: eventData.patient_id,
+        accessLink: eventData.access_link,
+        metadata: eventData.metadata
+      });
+
+      // TODO: Send notification to user about intro video request
+      // TODO: Store access link for future reference if needed
+
+    } catch (error) {
+      console.error('❌ Error processing intro video request:', error);
+      throw error;
+    }
+  }
+
+  async handleDriversLicenseRequested(eventData: DriversLicenseRequestedEvent): Promise<void> {
+    console.log('🆔 MD Integration drivers license requested:', eventData.patient_id);
+
+    try {
+      // Find user by mdPatientId
+      const user = await User.findOne({
+        where: { mdPatientId: eventData.patient_id }
+      });
+
+      if (!user) {
+        console.log('⚠️ User not found for MD patient ID:', eventData.patient_id);
+        return;
+      }
+
+      console.log('✅ Processing drivers license request for user:', user.id);
+
+      console.log('📋 Drivers license request details:', {
+        userId: user.id,
+        patientId: eventData.patient_id,
+        accessLink: eventData.access_link,
+        timestamp: eventData.timestamp,
+        metadata: eventData.metadata
+      });
+
+      // TODO: Send notification to user about drivers license request
+      // TODO: Store access link for future reference if needed
+      // TODO: Update user verification status or create verification record
+
+    } catch (error) {
+      console.error('❌ Error processing drivers license request:', error);
+      throw error;
+    }
+  }
+
   async processMDWebhook(eventData: any): Promise<void> {
     switch (eventData.event_type) {
       case 'offering_submitted':
         await this.handleOfferingSubmitted(eventData as OfferingSubmittedEvent);
+        break;
+
+      case 'intro_video_requested':
+        await this.handleIntroVideoRequested(eventData as IntroVideoRequestedEvent);
+        break;
+
+      case 'drivers_license_requested':
+        await this.handleDriversLicenseRequested(eventData as DriversLicenseRequestedEvent);
         break;
 
       default:
