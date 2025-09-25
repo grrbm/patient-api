@@ -1194,6 +1194,10 @@ app.get("/treatments/:id", async (req, res) => {
         {
           model: TreatmentPlan,
           as: 'treatmentPlans',
+        },
+        {
+          model: Clinic,
+          as: 'clinic',
         }
       ]
     });
