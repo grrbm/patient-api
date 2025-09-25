@@ -10,6 +10,7 @@ import BrandSubscriptionPlans from '../../models/BrandSubscriptionPlans';
 import OrderService from '../order.service';
 import MDAuthService from '../mdIntegration/MDAuth.service';
 import MDCaseService from '../mdIntegration/MDCase.service';
+import Treatment from '../../models/Treatment';
 
 
 export const handlePaymentIntentSucceeded = async (paymentIntent: Stripe.PaymentIntent): Promise<void> => {
@@ -409,7 +410,8 @@ export const handlePaymentIntentAmountCapturableUpdated = async (paymentIntent: 
                 model: Order,
                 as: 'order',
                 include: [
-                    { model: User, as: 'user' }
+                    { model: User, as: 'user' },
+                    { model: Treatment, as: 'treatment' }
                 ]
             }
         ]
@@ -422,6 +424,7 @@ export const handlePaymentIntentAmountCapturableUpdated = async (paymentIntent: 
 
     const user = payment.order.user;
     const order = payment.order;
+    const treatment = payment.order.treatment;
 
     // Check if user has mdPatientId
     if (!user.mdPatientId) {
@@ -448,18 +451,31 @@ export const handlePaymentIntentAmountCapturableUpdated = async (paymentIntent: 
             }))
             : [];
 
+        // Determine case offerings based on environment
+        let caseOfferings: { offering_id: string }[] = [];
+
+        if (process.env.NODE_ENV !== 'production') {
+            // Always use test offering in non-production environments
+            caseOfferings = [
+                {
+                    offering_id: "3c3d0118-e362-4466-9c92-d852720c5a41"
+                }
+            ];
+        } else if (treatment && treatment.mdCaseId) {
+            // Use treatment's mdCaseId for offering in production
+            caseOfferings = [
+                {
+                    offering_id: treatment.mdCaseId
+                }
+            ];
+        }
+
         const caseData = {
-            // TODO: Patient is hardcoded for now
             patient_id: user.mdPatientId,
             metadata: `orderId: ${order.id}`,
             hold_status: false,
             case_questions: caseQuestions,
-            // TODO: Hardcoded for testing
-            case_offerings: [
-                {
-                    offering_id: "3c3d0118-e362-4466-9c92-d852720c5a41"
-                }
-            ],
+            case_offerings: caseOfferings,
         };
 
         const caseResponse = await MDCaseService.createCase(caseData, tokenResponse.access_token);
