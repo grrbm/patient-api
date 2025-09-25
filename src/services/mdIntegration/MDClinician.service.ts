@@ -51,7 +51,6 @@ interface ClinicianResponse {
   is_out_of_office: boolean;
   out_of_office_message: string;
   managed_by_partner: boolean;
-  automatic_sync_video_file: Photo;
 }
 
 class MDClinicianService {
