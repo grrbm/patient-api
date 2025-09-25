@@ -30,7 +30,7 @@ if (!process.env.AWS_ACCESS_KEY_ID) {
   throw new Error('AWS_ACCESS_KEY_ID environment variable is required');
 }
 if (!process.env.AWS_SECRET_ACCESS_KEY) {
-  console.error('❌ AWS_SECRET_ACCESS_KEY environment variable is required');  
+  console.error('❌ AWS_SECRET_ACCESS_KEY environment variable is required');
   throw new Error('AWS_SECRET_ACCESS_KEY environment variable is required');
 }
 
@@ -56,7 +56,7 @@ export async function uploadToS3(
       Key: key,
       Body: fileBuffer,
       ContentType: contentType,
-      ACL: "public-read", // Make file publicly readable
+      // ACL: "public-read", // Make file publicly readable - Commented out due to bucket ACL restrictions
     });
 
     await s3Client.send(command);
