@@ -84,6 +84,15 @@ interface DriversLicenseRequestedEvent {
   metadata: string;
 }
 
+interface MessageCreatedEvent {
+  timestamp: number;
+  event_type: 'message_created';
+  message_id: string;
+  patient_id: string;
+  user_type: string;
+  channel: string;
+}
+
 class MDWebhookService {
   // This event will be dispatched when a treatment is approved and ready to be ordered, depending on the offering type:
   async handleOfferingSubmitted(eventData: OfferingSubmittedEvent): Promise<void> {
@@ -274,6 +283,42 @@ class MDWebhookService {
     }
   }
 
+  async handleMessageCreated(eventData: MessageCreatedEvent): Promise<void> {
+    console.log('💬 MD Integration message created:', eventData.message_id);
+
+    try {
+      // Find user by mdPatientId
+      const user = await User.findOne({
+        where: { mdPatientId: eventData.patient_id }
+      });
+
+      if (!user) {
+        console.log('⚠️ User not found for MD patient ID:', eventData.patient_id);
+        return;
+      }
+
+      console.log('✅ Processing message created for user:', user.id);
+
+      console.log('📋 Message details:', {
+        userId: user.id,
+        patientId: eventData.patient_id,
+        messageId: eventData.message_id,
+        userType: eventData.user_type,
+        channel: eventData.channel,
+        timestamp: eventData.timestamp
+      });
+
+      // TODO: Store message reference for future retrieval
+      // TODO: Send push notification to user about new message
+      // TODO: Update user's last activity timestamp
+      // TODO: Mark user as having active communication
+
+    } catch (error) {
+      console.error('❌ Error processing message created:', error);
+      throw error;
+    }
+  }
+
   async processMDWebhook(eventData: any): Promise<void> {
     switch (eventData.event_type) {
       case 'offering_submitted':
@@ -286,6 +331,10 @@ class MDWebhookService {
 
       case 'drivers_license_requested':
         await this.handleDriversLicenseRequested(eventData as DriversLicenseRequestedEvent);
+        break;
+
+      case 'message_created':
+        await this.handleMessageCreated(eventData as MessageCreatedEvent);
         break;
 
       default:
