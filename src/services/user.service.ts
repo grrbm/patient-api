@@ -326,6 +326,45 @@ class UserService {
         }
     }
 
+    async verifyUserAccount(userId: string) {
+        try {
+    
+            // Get user to check if they have mdPatientId
+            const user = await getUser(userId);
+            if (!user || !user.mdPatientId) {
+                return {
+                    success: false,
+                    message: "User not synced with MD Integration. Please try updating your profile first.",
+                    error: "Missing mdPatientId"
+                };
+            }
+
+            // Get MD Integration access token and retrieve driver's license info
+            const tokenResponse = await MDAuthService.generateToken();
+            const driversLicenseData = await MDPatientService.getDriversLicense(
+                user.mdPatientId,
+                tokenResponse.access_token
+            );
+
+            return {
+                success: true,
+                message: "Account verification data retrieved successfully",
+                data: {
+                    drivers_license_url: driversLicenseData.drivers_license_url,
+                    verification_code: driversLicenseData.verification_code,
+                }
+            };
+
+        } catch (error) {
+            console.error('❌ Error verifying patient account:', error);
+            return {
+                success: false,
+                message: "Internal server error",
+                error: error instanceof Error ? error.message : 'Unknown error occurred'
+            };
+        }
+    }
+
     async updateUserPatient(userId: string, updateData: Partial<User>, addressData?: AddressData,) {
         try {
             const user = await getUser(userId);

@@ -3664,30 +3664,14 @@ app.post("/patient/verify-account", authenticateJWT, async (req, res) => {
       });
     }
 
-    // Get user to check if they have mdPatientId
-    const user = await User.findByPk(currentUser.id);
-    if (!user || !user.mdPatientId) {
-      return res.status(400).json({
-        success: false,
-        message: "User not synced with MD Integration. Please try updating your profile first."
-      });
+
+    const result = await userService.verifyUserAccount(currentUser.id);
+
+    if (result.success) {
+      res.status(200).json(result);
+    } else {
+      res.status(400).json(result);
     }
-
-    // Get MD Integration access token and retrieve driver's license info
-    const tokenResponse = await MDAuthService.generateToken();
-    const driversLicenseData = await MDPatientService.getDriversLicense(
-      user.mdPatientId,
-      tokenResponse.access_token
-    );
-
-    res.status(200).json({
-      success: true,
-      message: "Account verification data retrieved successfully",
-      data: {
-        drivers_license_url: driversLicenseData.drivers_license_url,
-        verification_code: driversLicenseData.verification_code,
-      }
-    });
 
   } catch (error) {
     console.error('❌ Error verifying patient account:', error);
