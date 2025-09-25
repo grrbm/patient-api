@@ -138,6 +138,20 @@ export default class User extends Entity {
   })
   declare pharmacyPatientId?: string;
 
+  @Column({
+    type: DataType.STRING,
+    allowNull: true,
+  })
+  declare mdPatientId?: string;
+
+
+  @Column({
+    type: DataType.BOOLEAN,
+    allowNull: true,
+    defaultValue: false
+  })
+  declare mdValidated?: boolean;
+
 
   @Column({
     type: DataType.STRING,
