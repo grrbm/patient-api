@@ -80,6 +80,7 @@ interface Partner {
 
 // ISO 5218 gender format
 export type MDGender = 0 | 1 | 2 | 9; // 0 = not known, 1 = male, 2 = female, 9 = not applicable
+export type MDPhoneType =2  | 4 ; // 2 (cell) or 4 (home)
 
 interface CreatePatientRequest {
   prefix?: string;
@@ -92,7 +93,7 @@ interface CreatePatientRequest {
   gender: MDGender;
   metadata?: string;
   phone_number: string;
-  phone_type: number;
+  phone_type: MDPhoneType;
   address: Address;
   weight?: number;
   height?: number;
@@ -176,6 +177,11 @@ interface PatientResponse {
   auth_link?: string;
 }
 
+interface DriversLicenseResponse {
+  drivers_license_url: string;
+  verification_code: string;
+}
+
 class MDPatientService {
   private readonly apiUrl = 'https://api.mdintegrations.com/v1';
 
@@ -213,6 +219,23 @@ class MDPatientService {
     const response = await axios.get<PatientResponse>(
       `${this.apiUrl}/partner/patients/${patientId}`,
       {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+
+    return response.data;
+  }
+
+  async getDriversLicense(patientId: string, accessToken: string): Promise<DriversLicenseResponse> {
+    const response = await axios.get<DriversLicenseResponse>(
+      `${this.apiUrl}/partner/patients/${patientId}/drivers-license`,
+      {
+        params: {
+          fullscreen: true
+        },
         headers: {
           'Authorization': `Bearer ${accessToken}`,
           'Content-Type': 'application/json'
