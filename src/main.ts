@@ -1130,6 +1130,84 @@ app.post("/products", authenticateJWT, async (req, res) => {
   }
 });
 
+// Delete product endpoint
+app.delete("/products/:id", authenticateJWT, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const currentUser = getCurrentUser(req);
+
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "Not authenticated"
+      });
+    }
+
+    // Fetch full user data from database to get role and clinicId
+    const user = await User.findByPk(currentUser.id);
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: "User not found"
+      });
+    }
+
+    // Only allow doctors and brand users to delete products
+    if (user.role !== 'doctor' && user.role !== 'brand') {
+      return res.status(403).json({
+        success: false,
+        message: `Access denied. Only doctors and brand users can delete products. Your role: ${user.role}`
+      });
+    }
+
+    console.log(`🗑️ Deleting product: ${id}, user role: ${user.role}`);
+
+    // Find the product
+    const product = await Product.findByPk(id);
+    if (!product) {
+      return res.status(404).json({
+        success: false,
+        message: "Product not found"
+      });
+    }
+
+    // Delete associated image from S3 if it exists
+    if (product.imageUrl && product.imageUrl.trim() !== '') {
+      try {
+        await deleteFromS3(product.imageUrl);
+        console.log('🗑️ Product image deleted from S3');
+      } catch (error) {
+        console.error('Warning: Failed to delete product image from S3:', error);
+        // Don't fail the entire request if image deletion fails
+      }
+    }
+
+    // Delete the product
+    try {
+      await product.destroy();
+      console.log('✅ Product deleted successfully:', { id: product.id, name: product.name });
+    } catch (deleteError) {
+      console.error('Error deleting product from database:', deleteError);
+      return res.status(400).json({
+        success: false,
+        message: "Cannot delete product because it is being used by treatments. Please remove it from all treatments first."
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Product deleted successfully"
+    });
+
+  } catch (error) {
+    console.error('Error deleting product:', error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to delete product"
+    });
+  }
+});
+
 // Update product endpoint
 app.put("/products/:id", authenticateJWT, async (req, res) => {
   try {
