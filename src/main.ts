@@ -858,38 +858,113 @@ app.get("/products/by-clinic/:clinicId", authenticateJWT, async (req, res) => {
       });
     }
 
-    console.log(`🛍️ Fetching products for clinic: ${clinicId}, user role: ${user.role}`);
+    console.log(`🛍️ Fetching products for clinic: ${clinicId}, user role: ${user.role}, user clinicId: ${user.clinicId}`);
 
-    // Fetch products through treatments that belong to this clinic
-    const products = await Product.findAll({
+    // First, let's see all products in the database for debugging
+    const allProducts = await Product.findAll({
       include: [
         {
           model: Treatment,
           as: 'treatments',
-          where: { clinicId }, // Only include treatments from this clinic
-          through: { attributes: [] }, // Don't include junction table attributes
-          attributes: ['id', 'name'], // Only include needed fields
-          required: false // Allow products without treatments
+          through: { attributes: [] },
+          attributes: ['id', 'name'],
         }
       ],
       order: [['name', 'ASC']]
     });
 
-    // Filter out products that don't have any treatments from this clinic
-    const filteredProducts = products.filter(product =>
-      product.treatments && product.treatments.length > 0
+    console.log(`📊 Total products in database: ${allProducts.length}`);
+    console.log(`📊 Products with clinicId: ${allProducts.filter(p => p.clinicId).length}`);
+    console.log(`📊 Products with null/undefined clinicId: ${allProducts.filter(p => !p.clinicId).length}`);
+
+    // Fetch products that belong to this clinic (both with matching clinicId and legacy products)
+    let products = [];
+
+    // First, get products with matching clinicId
+    const directProducts = await Product.findAll({
+      where: { clinicId },
+      include: [
+        {
+          model: Treatment,
+          as: 'treatments',
+          through: { attributes: [] },
+          attributes: ['id', 'name'],
+        }
+      ],
+      order: [['name', 'ASC']]
+    });
+
+    console.log(`✅ Found ${directProducts.length} products with matching clinicId ${clinicId}`);
+    products.push(...directProducts);
+
+    // Also get legacy products (without clinicId) that are associated with treatments from this clinic
+    if (user.clinicId) {
+      const legacyProducts = await Product.findAll({
+        where: { clinicId: null },
+        include: [
+          {
+            model: Treatment,
+            as: 'treatments',
+            where: { clinicId: user.clinicId }, // Only treatments from user's clinic
+            through: { attributes: [] },
+            attributes: ['id', 'name'],
+          }
+        ],
+        order: [['name', 'ASC']]
+      });
+
+      // Filter out products that don't have treatments from this clinic
+      const filteredLegacyProducts = legacyProducts.filter(product =>
+        product.treatments && product.treatments.length > 0
+      );
+
+      if (filteredLegacyProducts.length > 0) {
+        console.log(`🔄 Found ${filteredLegacyProducts.length} legacy products (without clinicId) associated with treatments from clinic ${user.clinicId}`);
+        products.push(...filteredLegacyProducts);
+      }
+
+      // As a comprehensive fallback, also get any products that have treatments from this clinic
+      // (this catches products that might have clinicId set to something else or null)
+      const allClinicProducts = await Product.findAll({
+        include: [
+          {
+            model: Treatment,
+            as: 'treatments',
+            where: { clinicId: user.clinicId },
+            through: { attributes: [] },
+            attributes: ['id', 'name'],
+          }
+        ],
+        order: [['name', 'ASC']]
+      });
+
+      const comprehensiveFilteredProducts = allClinicProducts.filter(product =>
+        product.treatments && product.treatments.length > 0 &&
+        !products.some(p => p.id === product.id) // Don't duplicate products already found
+      );
+
+      if (comprehensiveFilteredProducts.length > 0) {
+        console.log(`🔄 Found ${comprehensiveFilteredProducts.length} additional products through comprehensive treatments search`);
+        products.push(...comprehensiveFilteredProducts);
+      }
+    }
+
+    // Remove duplicates based on product ID
+    const uniqueProducts = products.filter((product, index, self) =>
+      index === self.findIndex(p => p.id === product.id)
     );
 
-    console.log(`✅ Found ${filteredProducts.length} products for clinic ${clinicId} (from ${products.length} total products)`);
+    console.log(`📊 Total unique products found: ${uniqueProducts.length} (from ${products.length} before deduplication)`);
 
     // Transform data to match frontend expectations
-    const transformedProducts = filteredProducts.map(product => ({
+    const transformedProducts = uniqueProducts.map(product => ({
       id: product.id,
       name: product.name,
       price: product.price,
       pharmacyProductId: product.pharmacyProductId,
       dosage: product.dosage,
       imageUrl: product.imageUrl,
+      clinicId: product.clinicId, // Include clinicId for debugging
       active: true, // Default to active since Product model doesn't have active field
       createdAt: product.createdAt,
       updatedAt: product.updatedAt,
@@ -993,6 +1068,68 @@ app.get("/products/:id", authenticateJWT, async (req, res) => {
   }
 });
 
+// Create product endpoint
+app.post("/products", authenticateJWT, async (req, res) => {
+  try {
+    const { name, price, description, pharmacyProductId, dosage, activeIngredients, active } = req.body;
+    const currentUser = getCurrentUser(req);
+
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "Not authenticated"
+      });
+    }
+
+    // Fetch full user data from database to get role and clinicId
+    const user = await User.findByPk(currentUser.id);
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: "User not found"
+      });
+    }
+
+    // Only allow doctors and brand users to create products
+    if (user.role !== 'doctor' && user.role !== 'brand') {
+      return res.status(403).json({
+        success: false,
+        message: `Access denied. Only doctors and brand users can create products. Your role: ${user.role}`
+      });
+    }
+
+    console.log(`🛍️ Creating product for clinic: ${user.clinicId}, user role: ${user.role}`);
+
+    // Create the product
+    const newProduct = await Product.create({
+      name,
+      price: parseFloat(price),
+      description,
+      pharmacyProductId,
+      dosage,
+      activeIngredients: activeIngredients || [],
+      active: active !== undefined ? active : true,
+      clinicId: user.clinicId,
+      imageUrl: '' // Set empty string as default since imageUrl is now nullable
+    });
+
+    console.log('✅ Product created successfully:', { id: newProduct.id, name: newProduct.name });
+
+    res.status(201).json({
+      success: true,
+      message: "Product created successfully",
+      data: newProduct
+    });
+
+  } catch (error) {
+    console.error('Error creating product:', error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to create product"
+    });
+  }
+});
+
 // Update product endpoint
 app.put("/products/:id", authenticateJWT, async (req, res) => {
   try {
@@ -1043,7 +1180,9 @@ app.put("/products/:id", authenticateJWT, async (req, res) => {
       pharmacyProductId,
       dosage,
       activeIngredients: activeIngredients || [],
-      active: active !== undefined ? active : true
+      active: active !== undefined ? active : true,
+      // Only update imageUrl if it's explicitly provided in the request
+      ...(req.body.imageUrl !== undefined && { imageUrl: req.body.imageUrl })
     });
 
     console.log('✅ Product updated successfully:', { id: updatedProduct.id, name: updatedProduct.name });
@@ -1117,7 +1256,7 @@ app.post("/products/:id/upload-image", authenticateJWT, upload.single('image'), 
       }
 
       // Update product to remove the image URL
-      await product.update({ imageUrl: '' });
+      await product.update({ imageUrl: null });
 
       console.log('🖼️ Image removed from product:', { id: product.id });
 
