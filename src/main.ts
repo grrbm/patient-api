@@ -32,6 +32,7 @@ import QuestionService from "./services/question.service";
 import StripeService from "./services/stripe";
 import TreatmentPlanService from "./services/treatmentPlan.service";
 import PhysicianService from "./services/physician.service";
+import MDWebhookService from "./services/mdIntegration/MDWebhook.service";
 
 // Helper function to generate unique clinic slug
 async function generateUniqueSlug(clinicName: string, excludeId?: string): Promise<string> {
@@ -3695,6 +3696,7 @@ app.get("/orders/by-clinic/:clinicId", authenticateJWT, async (req, res) => {
   }
 });
 
+// TODO: Add security
 app.post("/webhook/orders", async (req, res) => {
   try {
     // Validate webhook secret
@@ -3715,14 +3717,15 @@ app.post("/webhook/orders", async (req, res) => {
       });
     }
 
-    const { orderId, physicianId } = req.body;
+    // Process MD Integration webhook
+    await MDWebhookService.processMDWebhook(req.body);
 
-
-    const result = await orderService.approveOrder(orderId, physicianId);
-
-    res.json(result);
+    res.json({
+      success: true,
+      message: "Webhook processed successfully"
+    });
   } catch (error) {
-    console.error('❌ Error creating pharmacy order:', error);
+    console.error('❌ Error processing MD Integration webhook:', error);
     res.status(500).json({
       success: false,
       message: "Internal server error"
