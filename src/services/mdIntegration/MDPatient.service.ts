@@ -80,7 +80,7 @@ interface Partner {
 
 // ISO 5218 gender format
 export type MDGender = 0 | 1 | 2 | 9; // 0 = not known, 1 = male, 2 = female, 9 = not applicable
-export type MDPhoneType =2  | 4 ; // 2 (cell) or 4 (home)
+export type MDPhoneType = 2 | 4; // 2 (cell) or 4 (home)
 
 interface CreatePatientRequest {
   prefix?: string;
@@ -92,7 +92,7 @@ interface CreatePatientRequest {
   driver_license_id?: string;
   gender: MDGender;
   metadata?: string;
-  phone_number: string;
+  phone_number: string; //Phone number - US format
   phone_type: MDPhoneType;
   address: Address;
   weight?: number;
@@ -201,7 +201,7 @@ class MDPatientService {
   }
 
   async updatePatient(patientId: string, patientData: UpdatePatientRequest, accessToken: string): Promise<PatientResponse> {
-    const response = await axios.put<PatientResponse>(
+    const response = await axios.patch<PatientResponse>(
       `${this.apiUrl}/partner/patients/${patientId}`,
       patientData,
       {
