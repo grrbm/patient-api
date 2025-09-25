@@ -45,6 +45,12 @@ export default class Treatment extends Entity {
     })
     declare stripeProductId?: string;
 
+    @Column({
+        type: DataType.STRING,
+        allowNull: true,
+    })
+    declare mdCaseId?: string;
+
 
 
     @ForeignKey(() => User)
