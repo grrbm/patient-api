@@ -1000,14 +1000,48 @@ app.get("/treatments/by-clinic-id/:clinicId", authenticateJWT, async (req, res) 
     // Find treatments for the clinic
     const treatments = await Treatment.findAll({
       where: { clinicId },
-      attributes: ['id', 'name', 'treatmentLogo', 'createdAt', 'updatedAt']
+      include: [
+        {
+          model: Product,
+          as: 'products',
+          through: { attributes: [] }
+        }
+      ]
     });
 
     console.log(`✅ Found ${treatments?.length || 0} treatments for clinic ID "${clinicId}"`);
 
+    // Recalculate productsPrice for each treatment
+    const updatedTreatments = await Promise.all(
+      treatments.map(async (treatment) => {
+        if (treatment.products && treatment.products.length > 0) {
+          const totalProductsPrice = treatment.products.reduce((sum, product) => {
+            const price = parseFloat(String(product.price || 0)) || 0;
+            return sum + price;
+          }, 0);
+
+          const markupAmount = (totalProductsPrice * 10) / 100; // 10% markup
+          const finalProductsPrice = totalProductsPrice + markupAmount;
+
+          // Update the stored value if it's different or NaN
+          if (isNaN(treatment.productsPrice) || Math.abs(treatment.productsPrice - finalProductsPrice) > 0.01) {
+            console.log(`💊 Updating productsPrice for ${treatment.name} from ${treatment.productsPrice} to ${finalProductsPrice}`);
+            await treatment.update({ productsPrice: finalProductsPrice });
+            treatment.productsPrice = finalProductsPrice;
+          }
+        }
+
+        // Return the treatment data without the full products array to keep response size reasonable
+        const treatmentData = treatment.toJSON();
+        delete treatmentData.products; // Remove the full products array to reduce response size
+
+        return treatmentData;
+      })
+    );
+
     res.json({
       success: true,
-      data: treatments || []
+      data: updatedTreatments
     });
 
   } catch (error) {
@@ -1172,6 +1206,24 @@ app.get("/treatments/:id", async (req, res) => {
     }
 
     console.log('💊 Treatment fetched:', { id: treatment.id, name: treatment.name, productsCount: treatment.products?.length || 0 });
+
+    // Recalculate productsPrice to ensure it's correct
+    if (treatment.products && treatment.products.length > 0) {
+      const totalProductsPrice = treatment.products.reduce((sum, product) => {
+        const price = parseFloat(String(product.price || 0)) || 0;
+        return sum + price;
+      }, 0);
+
+      const markupAmount = (totalProductsPrice * 10) / 100; // 10% markup
+      const finalProductsPrice = totalProductsPrice + markupAmount;
+
+      // Update the stored value if it's different or NaN
+      if (isNaN(treatment.productsPrice) || Math.abs(treatment.productsPrice - finalProductsPrice) > 0.01) {
+        console.log('💊 Updating productsPrice from', treatment.productsPrice, 'to', finalProductsPrice);
+        await treatment.update({ productsPrice: finalProductsPrice });
+        treatment.productsPrice = finalProductsPrice;
+      }
+    }
 
     res.status(200).json({
       success: true,
