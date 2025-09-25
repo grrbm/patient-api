@@ -79,20 +79,20 @@ class OrderService {
                 };
             }
 
-            if (user.role !== 'doctor') {
+            if (user.role !== 'doctor' && user.role !== 'brand') {
                 return {
                     success: false,
                     message: "Access denied",
-                    error: "Only doctors can list clinic orders"
+                    error: "Only doctors and brand users can list clinic orders"
                 };
             }
 
-            // Verify the doctor belongs to the clinic
+            // Verify the user belongs to the clinic
             if (user.clinicId !== clinicId) {
                 return {
                     success: false,
                     message: "Forbidden",
-                    error: "Doctor does not belong to the specified clinic"
+                    error: "User does not belong to the specified clinic"
                 };
             }
 
