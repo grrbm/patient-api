@@ -850,22 +850,6 @@ app.post("/treatment/:id/upload-logo", authenticateJWT, upload.single('logo'), a
       });
     }
 
-    // Check if file was uploaded
-    if (!req.file) {
-      return res.status(400).json({
-        success: false,
-        message: "No file uploaded"
-      });
-    }
-
-    // Validate file size (additional check)
-    if (!isValidFileSize(req.file.size)) {
-      return res.status(400).json({
-        success: false,
-        message: "File too large. Maximum size is 5MB."
-      });
-    }
-
     const treatment = await Treatment.findByPk(id);
     if (!treatment) {
       return res.status(404).json({
@@ -882,11 +866,58 @@ app.post("/treatment/:id/upload-logo", authenticateJWT, upload.single('logo'), a
       });
     }
 
-    // Delete old logo from S3 if it exists
+    // Check if this is a logo removal request
+    const removeLogo = req.body && typeof req.body === 'object' && 'removeLogo' in req.body && req.body.removeLogo === true;
+
+    if (removeLogo) {
+      // Remove the logo
+      if (treatment.treatmentLogo && treatment.treatmentLogo.trim() !== '') {
+        try {
+          await deleteFromS3(treatment.treatmentLogo);
+          console.log('🗑️ Treatment logo deleted from S3');
+        } catch (error) {
+          console.error('Warning: Failed to delete treatment logo from S3:', error);
+          // Don't fail the entire request if deletion fails
+        }
+      }
+
+      // Update treatment to remove the logo URL
+      await treatment.update({ treatmentLogo: '' });
+
+      console.log('💊 Logo removed from treatment:', { id: treatment.id });
+
+      return res.status(200).json({
+        success: true,
+        message: "Treatment logo removed successfully",
+        data: {
+          id: treatment.id,
+          name: treatment.name,
+          treatmentLogo: treatment.treatmentLogo,
+        }
+      });
+    }
+
+    // Check if file was uploaded for new logo
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: "No file uploaded"
+      });
+    }
+
+    // Validate file size (additional check)
+    if (!isValidFileSize(req.file.size)) {
+      return res.status(400).json({
+        success: false,
+        message: "File too large. Maximum size is 5MB."
+      });
+    }
+
+    // Delete old logo from S3 if it exists (1 product = 1 image policy)
     if (treatment.treatmentLogo && treatment.treatmentLogo.trim() !== '') {
       try {
         await deleteFromS3(treatment.treatmentLogo);
-        console.log('🗑️ Old treatment logo deleted from S3');
+        console.log('🗑️ Old treatment logo deleted from S3 (clean storage policy)');
       } catch (error) {
         console.error('Warning: Failed to delete old treatment logo from S3:', error);
         // Don't fail the entire request if deletion fails
