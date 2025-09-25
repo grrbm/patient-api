@@ -663,8 +663,8 @@ app.put("/clinic/:id", authenticateJWT, async (req, res) => {
       });
     }
 
-    // Only allow doctors to update clinic data, and only their own clinic
-    if (user.role !== 'doctor' || user.clinicId !== id) {
+    // Only allow doctors and brand users to update clinic data, and only their own clinic
+    if ((user.role !== 'doctor' && user.role !== 'brand') || user.clinicId !== id) {
       return res.status(403).json({
         success: false,
         message: "Access denied"
@@ -745,8 +745,8 @@ app.post("/clinic/:id/upload-logo", authenticateJWT, upload.single('logo'), asyn
       });
     }
 
-    // Only allow doctors to upload logos for their own clinic
-    if (user.role !== 'doctor' || user.clinicId !== id) {
+    // Only allow doctors and brand users to upload logos for their own clinic
+    if ((user.role !== 'doctor' && user.role !== 'brand') || user.clinicId !== id) {
       return res.status(403).json({
         success: false,
         message: "Access denied"
@@ -842,11 +842,11 @@ app.post("/treatment/:id/upload-logo", authenticateJWT, upload.single('logo'), a
       });
     }
 
-    // Only allow doctors to upload treatment logos for their own clinic's treatments
-    if (user.role !== 'doctor') {
+    // Only allow doctors and brand users to upload treatment logos for their own clinic's treatments
+    if (user.role !== 'doctor' && user.role !== 'brand') {
       return res.status(403).json({
         success: false,
-        message: "Only doctors can upload treatment logos"
+        message: "Only doctors and brand users can upload treatment logos"
       });
     }
 
@@ -1041,11 +1041,11 @@ app.post("/treatments", authenticateJWT, async (req, res) => {
       });
     }
 
-    // Only allow doctors to create treatments
-    if (user.role !== 'doctor' || !user.clinicId) {
+    // Only allow doctors and brand users to create treatments
+    if ((user.role !== 'doctor' && user.role !== 'brand') || !user.clinicId) {
       return res.status(403).json({
         success: false,
-        message: "Only doctors with a clinic can create treatments"
+        message: "Only doctors and brand users with a clinic can create treatments"
       });
     }
 
@@ -1223,7 +1223,7 @@ app.get("/treatment-plans/treatment/:treatmentId", authenticateJWT, async (req, 
 
     if (error instanceof Error) {
       if (error.message.includes('not found') ||
-          error.message.includes('does not belong to your clinic')) {
+        error.message.includes('does not belong to your clinic')) {
         return res.status(404).json({
           success: false,
           message: error.message
@@ -1286,7 +1286,7 @@ app.post("/treatment-plans", authenticateJWT, async (req, res) => {
 
     if (error instanceof Error) {
       if (error.message.includes('not found') ||
-          error.message.includes('does not belong to your clinic')) {
+        error.message.includes('does not belong to your clinic')) {
         return res.status(404).json({
           success: false,
           message: error.message
@@ -1349,7 +1349,7 @@ app.put("/treatment-plans", authenticateJWT, async (req, res) => {
 
     if (error instanceof Error) {
       if (error.message.includes('not found') ||
-          error.message.includes('does not belong to your clinic')) {
+        error.message.includes('does not belong to your clinic')) {
         return res.status(404).json({
           success: false,
           message: error.message
@@ -1408,7 +1408,7 @@ app.delete("/treatment-plans", authenticateJWT, async (req, res) => {
 
     if (error instanceof Error) {
       if (error.message.includes('not found') ||
-          error.message.includes('does not belong to your clinic')) {
+        error.message.includes('does not belong to your clinic')) {
         return res.status(404).json({
           success: false,
           message: error.message
@@ -1937,18 +1937,113 @@ app.get("/orders/:id", authenticateJWT, async (req, res) => {
     const { id } = req.params;
     const currentUser = getCurrentUser(req);
 
+    console.log('🔍 [ORDERS/:ID] Request received');
+    console.log('🔍 [ORDERS/:ID] Order ID:', id);
+    console.log('🔍 [ORDERS/:ID] Current user:', currentUser);
+
     if (!currentUser) {
+      console.log('❌ [ORDERS/:ID] No current user found');
       return res.status(401).json({
         success: false,
         message: "Not authenticated"
       });
     }
 
+    // Fetch full user data from database to get clinicId
+    console.log('🔍 [ORDERS/:ID] Fetching user from database...');
+    const user = await User.findByPk(currentUser.id);
+
+    if (!user) {
+      console.log('❌ [ORDERS/:ID] User not found in database');
+      return res.status(401).json({
+        success: false,
+        message: "User not found"
+      });
+    }
+
+    console.log('🔍 [ORDERS/:ID] User found:', {
+      id: user.id,
+      role: user.role,
+      clinicId: user.clinicId,
+      email: user.email
+    });
+
+    let whereClause: any = { id };
+    let accessType = 'unknown';
+
+    // If user is a patient, only allow access to their own orders
+    if (user.role === 'patient') {
+      whereClause.userId = currentUser.id;
+      accessType = 'patient_own_orders';
+      console.log('🔍 [ORDERS/:ID] Patient access - restricting to own orders');
+    } else if (user.role === 'doctor' || user.role === 'brand') {
+      accessType = 'clinic_access';
+      console.log(`🔍 [ORDERS/:ID] ${user.role.toUpperCase()} access - checking order belongs to clinic`);
+
+      // For doctors and brand users, find the order and check if it belongs to their clinic
+      console.log('🔍 [ORDERS/:ID] Finding order by ID...');
+      const order = await Order.findByPk(id);
+
+      if (!order) {
+        console.log('❌ [ORDERS/:ID] Order not found by ID:', id);
+        return res.status(404).json({
+          success: false,
+          message: "Order not found"
+        });
+      }
+
+      console.log('🔍 [ORDERS/:ID] Order found:', {
+        id: order.id,
+        userId: order.userId,
+        treatmentId: order.treatmentId,
+        status: order.status
+      });
+
+      // Get the treatment to find the clinic
+      console.log('🔍 [ORDERS/:ID] Finding treatment for order...');
+      const treatment = await Treatment.findByPk(order.treatmentId);
+
+      if (!treatment) {
+        console.log('❌ [ORDERS/:ID] Treatment not found for order:', order.treatmentId);
+        return res.status(404).json({
+          success: false,
+          message: "Treatment not found"
+        });
+      }
+
+      console.log('🔍 [ORDERS/:ID] Treatment found:', {
+        id: treatment.id,
+        name: treatment.name,
+        clinicId: treatment.clinicId
+      });
+
+      // Check if the treatment belongs to the user's clinic
+      console.log('🔍 [ORDERS/:ID] Checking clinic access...');
+      console.log('🔍 [ORDERS/:ID] User clinicId:', user.clinicId);
+      console.log('🔍 [ORDERS/:ID] Treatment clinicId:', treatment.clinicId);
+
+      if (treatment.clinicId !== user.clinicId) {
+        console.log('❌ [ORDERS/:ID] Access denied - treatment clinic does not match user clinic');
+        return res.status(403).json({
+          success: false,
+          message: "Access denied"
+        });
+      }
+
+      console.log(`✅ [ORDERS/:ID] ${user.role.toUpperCase()} clinic access granted`);
+    } else {
+      console.log(`❌ [ORDERS/:ID] Unsupported role: ${user.role}`);
+      return res.status(403).json({
+        success: false,
+        message: `Access denied for role: ${user.role}. Only patients, doctors, and brands can access orders.`
+      });
+    }
+
+    console.log('🔍 [ORDERS/:ID] Executing final query with whereClause:', whereClause);
+    console.log('🔍 [ORDERS/:ID] Access type:', accessType);
+
     const order = await Order.findOne({
-      where: {
-        id,
-        userId: currentUser.id // Ensure user can only access their own orders
-      },
+      where: whereClause,
       include: [
         {
           model: OrderItem,
@@ -1970,27 +2065,38 @@ app.get("/orders/:id", authenticateJWT, async (req, res) => {
         {
           model: ShippingOrder,
           as: 'shippingOrders'
+        },
+        {
+          model: User,
+          as: 'user'
         }
       ]
     });
 
     if (!order) {
+      console.log('❌ [ORDERS/:ID] Order not found after final query');
       return res.status(404).json({
         success: false,
         message: "Order not found"
       });
     }
 
+    console.log('✅ [ORDERS/:ID] Order successfully retrieved and returned');
     res.status(200).json({
       success: true,
       data: order
     });
 
   } catch (error) {
-    console.error('Error fetching order:', error);
+    console.error('❌ [ORDERS/:ID] Exception occurred:', error);
+    console.error('❌ [ORDERS/:ID] Error type:', error instanceof Error ? error.constructor.name : 'Unknown');
+    console.error('❌ [ORDERS/:ID] Error message:', error instanceof Error ? error.message : String(error));
+    console.error('❌ [ORDERS/:ID] Error stack:', error instanceof Error ? error.stack : 'No stack trace');
+
     res.status(500).json({
       success: false,
-      message: "Failed to fetch order"
+      message: "Failed to fetch order",
+      error: process.env.NODE_ENV === 'development' && error instanceof Error ? error.message : undefined
     });
   }
 });

@@ -31,7 +31,7 @@ export default class Payment extends Entity {
   })
   declare orderId: string;
 
-  @BelongsTo(() => Order)
+  @BelongsTo(() => Order, 'orderId')
   declare order: Order;
 
   @Column({
@@ -131,14 +131,14 @@ export default class Payment extends Entity {
   // Update payment status from Stripe webhook
   public async updateFromStripeEvent(eventData: any): Promise<void> {
     const paymentIntent = eventData.object;
-    
+
     this.status = this.mapStripeStatus(paymentIntent.status);
-    
+
     if (paymentIntent.charges?.data?.[0]) {
       const charge = paymentIntent.charges.data[0];
       this.stripeChargeId = charge.id;
       this.stripeCustomerId = charge.customer;
-      
+
       if (charge.payment_method_details?.card) {
         const card = charge.payment_method_details.card;
         this.lastFourDigits = card.last4;
@@ -146,17 +146,17 @@ export default class Payment extends Entity {
         this.cardCountry = card.country;
       }
     }
-    
+
     if (this.status === PaymentStatus.SUCCEEDED) {
       this.paidAt = new Date();
     }
-    
+
     if (paymentIntent.last_payment_error) {
       this.failureReason = paymentIntent.last_payment_error.message;
     }
-    
+
     this.stripeMetadata = paymentIntent.metadata;
-    
+
     await this.save();
   }
 
@@ -183,19 +183,19 @@ export default class Payment extends Entity {
   // Process refund
   public async processRefund(amount?: number): Promise<void> {
     const refundAmount = amount || this.amount;
-    
+
     if (this.refundedAmount) {
       this.refundedAmount += refundAmount;
     } else {
       this.refundedAmount = refundAmount;
     }
-    
+
     if (this.refundedAmount >= this.amount) {
       this.status = PaymentStatus.REFUNDED;
     } else {
       this.status = PaymentStatus.PARTIALLY_REFUNDED;
     }
-    
+
     this.refundedAt = new Date();
     await this.save();
   }

@@ -7,6 +7,7 @@ import OrderItem from './OrderItem';
 import ShippingAddress from './ShippingAddress';
 import ShippingOrder from './ShippingOrder';
 import Subscription from './Subscription';
+import Payment from './Payment';
 import TreatmentPlan, { BillingInterval } from './TreatmentPlan';
 import Physician from './Physician';
 
@@ -164,6 +165,8 @@ export default class Order extends Entity {
   @HasOne(() => Subscription)
   declare subscription?: Subscription;
 
+  @HasOne(() => Payment, 'orderId')
+  declare payment?: Payment;
 
   @HasMany(() => OrderItem)
   declare orderItems: OrderItem[];
