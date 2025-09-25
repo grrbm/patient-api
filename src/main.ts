@@ -820,6 +820,384 @@ app.post("/clinic/:id/upload-logo", authenticateJWT, upload.single('logo'), asyn
   }
 });
 
+// Products by clinic endpoint
+app.get("/products/by-clinic/:clinicId", authenticateJWT, async (req, res) => {
+  try {
+    const { clinicId } = req.params;
+    const currentUser = getCurrentUser(req);
+
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "Not authenticated"
+      });
+    }
+
+    // Fetch full user data from database to get role
+    const user = await User.findByPk(currentUser.id);
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: "User not found"
+      });
+    }
+
+    // Only allow doctors and brand users to access products for their own clinic
+    if (user.role !== 'doctor' && user.role !== 'brand') {
+      return res.status(403).json({
+        success: false,
+        message: `Access denied. Only doctors and brand users can access products. Your role: ${user.role}`
+      });
+    }
+
+    // Verify the user has access to this clinic
+    if (user.clinicId !== clinicId) {
+      return res.status(403).json({
+        success: false,
+        message: "Access denied. You can only access products for your own clinic."
+      });
+    }
+
+    console.log(`🛍️ Fetching products for clinic: ${clinicId}, user role: ${user.role}`);
+
+    // Fetch products through treatments that belong to this clinic
+    const products = await Product.findAll({
+      include: [
+        {
+          model: Treatment,
+          as: 'treatments',
+          where: { clinicId }, // Only include treatments from this clinic
+          through: { attributes: [] }, // Don't include junction table attributes
+          attributes: ['id', 'name'], // Only include needed fields
+          required: false // Allow products without treatments
+        }
+      ],
+      order: [['name', 'ASC']]
+    });
+
+    // Filter out products that don't have any treatments from this clinic
+    const filteredProducts = products.filter(product =>
+      product.treatments && product.treatments.length > 0
+    );
+
+    console.log(`✅ Found ${filteredProducts.length} products for clinic ${clinicId} (from ${products.length} total products)`);
+
+    // Transform data to match frontend expectations
+    const transformedProducts = filteredProducts.map(product => ({
+      id: product.id,
+      name: product.name,
+      price: product.price,
+      pharmacyProductId: product.pharmacyProductId,
+      dosage: product.dosage,
+      imageUrl: product.imageUrl,
+      active: true, // Default to active since Product model doesn't have active field
+      createdAt: product.createdAt,
+      updatedAt: product.updatedAt,
+      treatments: product.treatments || []
+    }));
+
+    res.status(200).json({
+      success: true,
+      message: "Products retrieved successfully",
+      data: transformedProducts
+    });
+
+  } catch (error) {
+    console.error('Error fetching products by clinic:', error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch products"
+    });
+  }
+});
+
+// Single product endpoint
+app.get("/products/:id", authenticateJWT, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const currentUser = getCurrentUser(req);
+
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "Not authenticated"
+      });
+    }
+
+    // Fetch full user data from database to get role
+    const user = await User.findByPk(currentUser.id);
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: "User not found"
+      });
+    }
+
+    // Only allow doctors and brand users to access products
+    if (user.role !== 'doctor' && user.role !== 'brand') {
+      return res.status(403).json({
+        success: false,
+        message: `Access denied. Only doctors and brand users can access products. Your role: ${user.role}`
+      });
+    }
+
+    console.log(`🛍️ Fetching single product: ${id}, user role: ${user.role}`);
+
+    // Fetch product with associated treatments
+    const product = await Product.findByPk(id, {
+      include: [
+        {
+          model: Treatment,
+          as: 'treatments',
+          through: { attributes: [] }, // Don't include junction table attributes
+          attributes: ['id', 'name'] // Only include needed fields
+        }
+      ]
+    });
+
+    if (!product) {
+      return res.status(404).json({
+        success: false,
+        message: "Product not found"
+      });
+    }
+
+    // Transform data to match frontend expectations
+    const transformedProduct = {
+      id: product.id,
+      name: product.name,
+      price: product.price,
+      pharmacyProductId: product.pharmacyProductId,
+      dosage: product.dosage,
+      description: product.description,
+      activeIngredients: product.activeIngredients,
+      imageUrl: product.imageUrl,
+      active: true, // Default to active since Product model doesn't have active field
+      createdAt: product.createdAt,
+      updatedAt: product.updatedAt,
+      treatments: product.treatments || []
+    };
+
+    res.status(200).json({
+      success: true,
+      message: "Product retrieved successfully",
+      data: transformedProduct
+    });
+
+  } catch (error) {
+    console.error('Error fetching product:', error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch product"
+    });
+  }
+});
+
+// Update product endpoint
+app.put("/products/:id", authenticateJWT, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, price, description, pharmacyProductId, dosage, activeIngredients, active } = req.body;
+    const currentUser = getCurrentUser(req);
+
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "Not authenticated"
+      });
+    }
+
+    // Fetch full user data from database to get role
+    const user = await User.findByPk(currentUser.id);
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: "User not found"
+      });
+    }
+
+    // Only allow doctors and brand users to update products
+    if (user.role !== 'doctor' && user.role !== 'brand') {
+      return res.status(403).json({
+        success: false,
+        message: `Access denied. Only doctors and brand users can update products. Your role: ${user.role}`
+      });
+    }
+
+    console.log(`🛍️ Updating product: ${id}, user role: ${user.role}`);
+
+    // Find the product
+    const product = await Product.findByPk(id);
+    if (!product) {
+      return res.status(404).json({
+        success: false,
+        message: "Product not found"
+      });
+    }
+
+    // Update the product
+    const updatedProduct = await product.update({
+      name,
+      price: parseFloat(price),
+      description,
+      pharmacyProductId,
+      dosage,
+      activeIngredients: activeIngredients || [],
+      active: active !== undefined ? active : true
+    });
+
+    console.log('✅ Product updated successfully:', { id: updatedProduct.id, name: updatedProduct.name });
+
+    res.status(200).json({
+      success: true,
+      message: "Product updated successfully",
+      data: updatedProduct
+    });
+
+  } catch (error) {
+    console.error('Error updating product:', error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to update product"
+    });
+  }
+});
+
+// Product image upload endpoint
+app.post("/products/:id/upload-image", authenticateJWT, upload.single('image'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const currentUser = getCurrentUser(req);
+
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "Not authenticated"
+      });
+    }
+
+    // Fetch full user data from database to get role
+    const user = await User.findByPk(currentUser.id);
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: "User not found"
+      });
+    }
+
+    // Only allow doctors and brand users to upload product images for their own clinic's products
+    if (user.role !== 'doctor' && user.role !== 'brand') {
+      return res.status(403).json({
+        success: false,
+        message: "Only doctors and brand users can upload product images"
+      });
+    }
+
+    // Check if this is a removal request (no file provided)
+    const removeImage = req.body && typeof req.body === 'object' && 'removeImage' in req.body && req.body.removeImage === true;
+
+    if (removeImage) {
+      // Remove the image
+      const product = await Product.findByPk(id);
+      if (!product) {
+        return res.status(404).json({
+          success: false,
+          message: "Product not found"
+        });
+      }
+
+      if (product.imageUrl && product.imageUrl.trim() !== '') {
+        try {
+          await deleteFromS3(product.imageUrl);
+          console.log('🗑️ Product image deleted from S3');
+        } catch (error) {
+          console.error('Warning: Failed to delete product image from S3:', error);
+          // Don't fail the entire request if deletion fails
+        }
+      }
+
+      // Update product to remove the image URL
+      await product.update({ imageUrl: '' });
+
+      console.log('🖼️ Image removed from product:', { id: product.id });
+
+      return res.status(200).json({
+        success: true,
+        message: "Product image removed successfully",
+        data: {
+          id: product.id,
+          name: product.name,
+          imageUrl: product.imageUrl,
+        }
+      });
+    }
+
+    // Check if file was uploaded for new image
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: "No file uploaded"
+      });
+    }
+
+    // Validate file size (additional check)
+    if (!isValidFileSize(req.file.size)) {
+      return res.status(400).json({
+        success: false,
+        message: "File too large. Maximum size is 5MB."
+      });
+    }
+
+    const product = await Product.findByPk(id);
+    if (!product) {
+      return res.status(404).json({
+        success: false,
+        message: "Product not found"
+      });
+    }
+
+    // Delete old image from S3 if it exists (1 product = 1 image policy)
+    if (product.imageUrl && product.imageUrl.trim() !== '') {
+      try {
+        await deleteFromS3(product.imageUrl);
+        console.log('🗑️ Old product image deleted from S3 (clean storage policy)');
+      } catch (error) {
+        console.error('Warning: Failed to delete old product image from S3:', error);
+        // Don't fail the entire request if deletion fails
+      }
+    }
+
+    // Upload new image to S3
+    const imageUrl = await uploadToS3(
+      req.file.buffer,
+      req.file.originalname,
+      req.file.mimetype
+    );
+
+    // Update product with new image URL
+    await product.update({ imageUrl });
+
+    console.log('🖼️ Image uploaded for product:', { id: product.id, imageUrl });
+
+    res.status(200).json({
+      success: true,
+      message: "Product image uploaded successfully",
+      data: {
+        id: product.id,
+        name: product.name,
+        imageUrl: product.imageUrl,
+      }
+    });
+
+  } catch (error) {
+    console.error('Error uploading product image:', error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to upload product image"
+    });
+  }
+});
+
 // Treatment logo upload endpoint
 app.post("/treatment/:id/upload-logo", authenticateJWT, upload.single('logo'), async (req, res) => {
   try {

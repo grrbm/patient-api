@@ -49,15 +49,14 @@ export async function uploadToS3(
 ): Promise<string> {
   try {
     // Generate unique key with timestamp
-    const key = `clinic-logos/${Date.now()}-${fileName}`;
+    const key = `product-images/${Date.now()}-${fileName}`;
 
     const command = new PutObjectCommand({
       Bucket: BUCKET_NAME,
       Key: key,
       Body: fileBuffer,
       ContentType: contentType,
-      // Make file publicly readable
-      // ACL: "public-read", // Uncomment if bucket allows ACL
+      ACL: "public-read", // Make file publicly readable
     });
 
     await s3Client.send(command);
