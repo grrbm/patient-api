@@ -2950,6 +2950,142 @@ app.post("/brand-subscriptions/create-checkout-session", authenticateJWT, async 
   }
 });
 
+// Create combined checkout session (subscription + onboarding)
+app.post("/brand-subscriptions/create-combined-checkout", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+    const { planType, onboardingType, totalAmount, items, successUrl, cancelUrl } = req.body;
+
+    if (currentUser?.role !== 'brand') {
+      return res.status(403).json({
+        success: false,
+        message: "Access denied. Brand role required."
+      });
+    }
+
+    // Check if user already has an active subscription
+    const existingSubscription = await BrandSubscription.findOne({
+      where: {
+        userId: currentUser.id,
+        status: ['active', 'processing', 'past_due']
+      }
+    });
+
+    if (existingSubscription) {
+      return res.status(400).json({
+        success: false,
+        message: "You already have an active subscription. Please cancel your current subscription before creating a new one."
+      });
+    }
+
+    const selectedPlan = await BrandSubscriptionPlans.getPlanByType(planType as any);
+
+    if (!selectedPlan) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid plan type"
+      });
+    }
+
+    // Get full user data from database
+    const user = await User.findByPk(currentUser.id);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found"
+      });
+    }
+
+    // Create or retrieve Stripe customer
+    let stripeCustomer;
+    try {
+      const customers = await stripe.customers.list({
+        email: user.email,
+        limit: 1
+      });
+
+      if (customers.data.length > 0) {
+        stripeCustomer = customers.data[0];
+      } else {
+        stripeCustomer = await stripe.customers.create({
+          email: user.email,
+          name: `${user.firstName} ${user.lastName}`,
+          metadata: {
+            userId: user.id,
+            role: user.role,
+            planType: planType
+          }
+        });
+      }
+    } catch (stripeError) {
+      console.error('Error with Stripe customer:', stripeError);
+      return res.status(500).json({
+        success: false,
+        message: "Failed to create Stripe customer"
+      });
+    }
+
+    // Create line items for Stripe checkout
+    const lineItems = items.map((item: any) => {
+      if (item.type === 'subscription') {
+        return {
+          price: selectedPlan.stripePriceId,
+          quantity: 1
+        };
+      } else {
+        // For one-time items (onboarding), create a price on the fly
+        return {
+          price_data: {
+            currency: 'usd',
+            product_data: {
+              name: item.name,
+              description: `One-time ${item.name} fee`
+            },
+            unit_amount: item.price * 100 // Convert to cents
+          },
+          quantity: 1
+        };
+      }
+    });
+
+    // Create Stripe checkout session
+    const session = await stripe.checkout.sessions.create({
+      customer: stripeCustomer.id,
+      payment_method_types: ['card'],
+      line_items: lineItems,
+      mode: 'subscription', // This handles both subscription and one-time payments
+      success_url: successUrl,
+      cancel_url: cancelUrl,
+      metadata: {
+        userId: currentUser.id,
+        planType: planType,
+        onboardingType: onboardingType,
+        totalAmount: totalAmount.toString()
+      },
+      subscription_data: {
+        metadata: {
+          userId: currentUser.id,
+          planType: planType,
+          onboardingType: onboardingType
+        }
+      }
+    });
+
+    res.status(200).json({
+      success: true,
+      url: session.url,
+      sessionId: session.id
+    });
+
+  } catch (error) {
+    console.error('Error creating combined checkout session:', error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to create checkout session"
+    });
+  }
+});
+
 // Cancel brand subscription
 app.post("/brand-subscriptions/cancel", authenticateJWT, async (req, res) => {
   try {
