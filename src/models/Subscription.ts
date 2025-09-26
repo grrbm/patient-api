@@ -9,6 +9,7 @@ export enum PaymentStatus {
   PAID = 'paid',
   PAYMENT_DUE = 'payment_due',
   CANCELLED = 'cancelled',
+  SUBSCRIPTION_DELETED = 'deleted',
 }
 
 
@@ -87,6 +88,10 @@ export default class Subscription extends Entity {
   public async markSubAsCanceled(): Promise<void> {
     this.status = PaymentStatus.CANCELLED;
     this.cancelledAt = new Date()
+    await this.save();
+  }
+   public async markSubAsDeleted(): Promise<void> {
+    this.status = PaymentStatus.SUBSCRIPTION_DELETED;
     await this.save();
   }
 

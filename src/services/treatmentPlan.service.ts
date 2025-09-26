@@ -106,6 +106,12 @@ class TreatmentPlanService {
 
         // Create new Stripe price if price or billing interval changed
         if (priceChanged || intervalChanged) {
+            // Deactivate the previous price first
+            if (treatmentPlan.stripePriceId) {
+                await this.stripeService.deprecatePrice(treatmentPlan.stripePriceId);
+            }
+
+            // Create new price
             await this.ensureStripePrice(updatedPlan, treatmentPlan.treatment);
         }
 
