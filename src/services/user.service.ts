@@ -1,0 +1,279 @@
+import User from '../models/User';
+import { getUser, updateUser } from './db/user';
+import PatientService, { CreatePatientRequest, PatientAddress } from './pharmacy/patient';
+import { ShippingAddressService, AddressData } from './shippingAddress.service';
+import ShippingAddress from '../models/ShippingAddress';
+
+interface UserToPatientValidationResult {
+    valid: boolean;
+    missingFields: string[];
+    errorMessage?: string;
+}
+
+interface UserToPhysicianValidationResult {
+    valid: boolean;
+    missingFields: string[];
+    errorMessage?: string;
+}
+
+class UserService {
+    private patientService: PatientService;
+
+    constructor() {
+        this.patientService = new PatientService();
+    }
+
+
+
+    validateUserForPatientCreation(user: User): UserToPatientValidationResult {
+        const missingFields: string[] = [];
+
+        // Required string fields for CreatePatientRequest
+        if (!user.firstName?.trim()) {
+            missingFields.push('firstName (first_name)');
+        }
+        if (!user.lastName?.trim()) {
+            missingFields.push('lastName (last_name)');
+        }
+        if (!user.dob) {
+            missingFields.push('dob (date of birth in YYYY-MM-DD format)');
+        }
+        if (!user.gender?.trim()) {
+            missingFields.push('gender');
+        }
+        if (!user.email?.trim()) {
+            missingFields.push('email');
+        }
+        if (!user.phoneNumber?.trim()) {
+            missingFields.push('phoneNumber (phone_number)');
+        }
+
+        // Required array fields for CreatePatientRequest
+        if (!user.allergies || !Array.isArray(user.allergies)) {
+            missingFields.push('allergies (must be an array)');
+        }
+        if (!user.diseases || !Array.isArray(user.diseases)) {
+            missingFields.push('diseases (must be an array)');
+        }
+        if (!user.medications || !Array.isArray(user.medications)) {
+            missingFields.push('medications (must be an array)');
+        }
+
+        // Required address fields for CreatePatientRequest
+        if (!user.address?.trim()) {
+            missingFields.push('address (street)');
+        }
+        if (!user.city?.trim()) {
+            missingFields.push('city');
+        }
+        if (!user.state?.trim()) {
+            missingFields.push('state');
+        }
+        if (!user.zipCode?.trim()) {
+            missingFields.push('zipCode (zip)');
+        }
+
+        if (missingFields.length > 0) {
+            return {
+                valid: false,
+                missingFields,
+                errorMessage: `Missing required fields for patient creation: ${missingFields.join(', ')}`
+            };
+        }
+
+        return {
+            valid: true,
+            missingFields: []
+        };
+    }
+
+    async mapUserToPatientRequest(user: User, addressId?: string): Promise<CreatePatientRequest> {
+        let address: PatientAddress;
+
+        if (addressId) {
+            // Use shipping address if provided
+            const shippingAddress = await ShippingAddress.findOne({
+                where: { id: addressId, userId: user.id }
+            });
+
+            if (shippingAddress) {
+                address = {
+                    street: shippingAddress.address,
+                    city: shippingAddress.city,
+                    state: shippingAddress.state,
+                    zip: shippingAddress.zipCode
+                };
+            } else {
+                // Fallback to user address if shipping address not found
+                address = {
+                    street: user.address!,
+                    city: user.city!,
+                    state: user.state!,
+                    zip: user.zipCode!
+                };
+            }
+        } else {
+            // Use user address
+            address = {
+                street: user.address!,
+                city: user.city!,
+                state: user.state!,
+                zip: user.zipCode!
+            };
+        }
+
+        return {
+            first_name: user.firstName,
+            last_name: user.lastName,
+            dob: user.dob!, // Format: YYYY-MM-DD
+            gender: user.gender!,
+            allergies: user.allergies!,
+            diseases: user.diseases!,
+            medications: user.medications!,
+            email: user.email,
+            phone_number: user.phoneNumber!.replace(/[^0-9]/g, ''), // Remove all special symbols, keep only digits
+            address: address
+        };
+    }
+
+    async syncPatientFromUser(userId: string, addressId?: string) {
+        try {
+            const user = await getUser(userId);
+
+            if (!user) {
+                throw Error("User not found")
+            }
+
+            const validation = this.validateUserForPatientCreation(user);
+
+            if (!validation.valid) {
+                return null
+            }
+
+            const patientRequest = await this.mapUserToPatientRequest(user, addressId);
+
+            // Check if user already has a pharmacy patient ID
+            if (!user.pharmacyPatientId) {
+                // Create new patient
+                const result = await this.patientService.createPatient(patientRequest);
+
+                // If creation successful, save the pharmacy patient ID to user
+                if (result.success && result.data?.id) {
+                    await User.update(
+                        { pharmacyPatientId: result.data.id },
+                        { where: { id: userId } }
+                    );
+                }
+
+
+            } else {
+                // Update existing patient
+                await this.patientService.updatePatient(
+                    parseInt(user.pharmacyPatientId),
+                    patientRequest
+                );
+            }
+
+            user.reload()
+            return user
+        } catch (error) {
+            console.error('Error syncing patient from user:', error);
+        }
+    }
+
+    async updateUserPatient(userId: string, updateData: Partial<User>, addressData?: AddressData,) {
+        try {
+            const user = await getUser(userId);
+
+            if (!user) {
+                return {
+                    success: false,
+                    error: "User not found"
+                };
+            }
+
+            // Validate user is a patient
+            if (user.role !== 'patient') {
+                return {
+                    success: false,
+                    error: "Only patient users can be updated through this method"
+                };
+            }
+
+            // Remove email from updateData to avoid issues when changing email
+            // TODO: Migrate this into a better strategy to sanitize payload
+            const { email, clinicId, createdAt, updatedAt, passwordHash, role, ...safeUpdateData } = updateData;
+
+            // Update user in database
+            await updateUser(userId, safeUpdateData);
+
+            // Handle address update/creation if address data is provided
+            let addressId = addressData?.addressId;
+            if (addressData) {
+                const updatedAddress = await ShippingAddressService.updateOrCreateAddress(
+                    userId,
+                    addressData,
+                );
+                addressId = updatedAddress.id;
+            }
+
+            // Attempt to sync patient data with pharmacy
+            await this.syncPatientFromUser(userId, addressId);
+
+            return {
+                success: true,
+                message: "User updated successfully",
+            };
+
+        } catch (error) {
+            console.error('Error updating user:', error);
+            return {
+                success: false,
+                error: error instanceof Error ? error.message : 'Unknown error occurred'
+            };
+        }
+    }
+
+
+
+    // Might not be used for now. as we will only use one physician to approve orders
+    async updateUserDoctor(userId: string, updateData: Partial<User>) {
+        try {
+            const user = await getUser(userId);
+
+            if (!user) {
+                return {
+                    success: false,
+                    error: "User not found"
+                };
+            }
+
+            // Validate user is a doctor
+            if (user.role !== 'doctor') {
+                return {
+                    success: false,
+                    error: "Only doctor users can be updated through this method"
+                };
+            }
+
+            // Update user in database
+            await updateUser(userId, updateData);
+
+
+            return {
+                success: true,
+                message: "Doctor updated successfully",
+            };
+
+        } catch (error) {
+            console.error('Error updating doctor:', error);
+            return {
+                success: false,
+                error: error instanceof Error ? error.message : 'Unknown error occurred'
+            };
+        }
+    }
+}
+
+export default UserService;
+export { UserToPatientValidationResult, UserToPhysicianValidationResult };
