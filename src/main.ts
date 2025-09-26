@@ -33,6 +33,9 @@ import StripeService from "./services/stripe";
 import TreatmentPlanService from "./services/treatmentPlan.service";
 import PhysicianService from "./services/physician.service";
 import SubscriptionService from "./services/subscription.service";
+import MDWebhookService from "./services/mdIntegration/MDWebhook.service";
+import MDPatientService from "./services/mdIntegration/MDPatient.service";
+import MDAuthService from "./services/mdIntegration/MDAuth.service";
 
 // Helper function to generate unique clinic slug
 async function generateUniqueSlug(clinicName: string, excludeId?: string): Promise<string> {
@@ -3700,6 +3703,61 @@ const treatmentService = new TreatmentService();
 const orderService = new OrderService();
 
 
+// Check the status 
+app.get("/patient/verify-account", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "Not authenticated"
+      });
+    }
+
+    const verified = await userService.isUserVerified(currentUser.id);
+
+    res.status(200).json({ verified });
+
+  } catch (error) {
+    console.error('❌ Error updating patient:', error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error"
+    });
+  }
+});
+
+app.post("/patient/verify-account", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "Not authenticated"
+      });
+    }
+
+
+    const result = await userService.verifyUserAccount(currentUser.id);
+
+    if (result.success) {
+      res.status(200).json(result);
+    } else {
+      res.status(400).json(result);
+    }
+
+  } catch (error) {
+    console.error('❌ Error verifying patient account:', error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: error instanceof Error ? error.message : 'Unknown error occurred'
+    });
+  }
+});
+
 app.put("/patient", authenticateJWT, async (req, res) => {
   try {
     const currentUser = getCurrentUser(req);
@@ -3770,6 +3828,7 @@ app.get("/orders/by-clinic/:clinicId", authenticateJWT, async (req, res) => {
   }
 });
 
+// TODO: Add security
 app.post("/webhook/orders", async (req, res) => {
   try {
     // Validate webhook secret
@@ -3790,14 +3849,15 @@ app.post("/webhook/orders", async (req, res) => {
       });
     }
 
-    const { orderId, physicianId } = req.body;
+    // Process MD Integration webhook
+    await MDWebhookService.processMDWebhook(req.body);
 
-
-    const result = await orderService.approveOrder(orderId, physicianId);
-
-    res.json(result);
+    res.json({
+      success: true,
+      message: "Webhook processed successfully"
+    });
   } catch (error) {
-    console.error('❌ Error creating pharmacy order:', error);
+    console.error('❌ Error processing MD Integration webhook:', error);
     res.status(500).json({
       success: false,
       message: "Internal server error"

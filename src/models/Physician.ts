@@ -94,6 +94,12 @@ export default class Physician extends Entity {
     })
     declare active: boolean;
 
+    @Column({
+        type: DataType.STRING,
+        allowNull: true,
+      })
+      declare mdPhysicianId?: string;
+
     // Helper method to get full name
     get fullName(): string {
         const middle = this.middleName ? ` ${this.middleName}` : '';

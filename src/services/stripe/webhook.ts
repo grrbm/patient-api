@@ -8,6 +8,9 @@ import BrandSubscription, { BrandSubscriptionStatus } from '../../models/BrandSu
 import User from '../../models/User';
 import BrandSubscriptionPlans from '../../models/BrandSubscriptionPlans';
 import OrderService from '../order.service';
+import MDAuthService from '../mdIntegration/MDAuth.service';
+import MDCaseService from '../mdIntegration/MDCase.service';
+import Treatment from '../../models/Treatment';
 
 
 export const handlePaymentIntentSucceeded = async (paymentIntent: Stripe.PaymentIntent): Promise<void> => {
@@ -389,6 +392,109 @@ export const handleSubscriptionDeleted = async (subscription: Stripe.Subscriptio
     }
 };
 
+/**
+ * This event fires when:
+  - A payment method is authorized (validated) but not yet captured
+  - The amount_capturable field on the PaymentIntent becomes greater than 0
+  - You're using manual capture mode (capture_method: 'manual')
+ * @param paymentIntent
+ */
+export const handlePaymentIntentAmountCapturableUpdated = async (paymentIntent: Stripe.PaymentIntent): Promise<void> => {
+    console.log('payment_intent.amount_capturable_updated:', paymentIntent.id);
+
+    // Find payment record to get associated order
+    const payment = await Payment.findOne({
+        where: { stripePaymentIntentId: paymentIntent.id },
+        include: [
+            {
+                model: Order,
+                as: 'order',
+                include: [
+                    { model: User, as: 'user' },
+                    { model: Treatment, as: 'treatment' }
+                ]
+            }
+        ]
+    });
+
+    if (!payment || !payment.order || !payment.order.user) {
+        console.log('ℹ️ Payment intent not associated with order or user not found:', paymentIntent.id);
+        return;
+    }
+
+    const user = payment.order.user;
+    const order = payment.order;
+    const treatment = payment.order.treatment;
+
+    // Check if user has mdPatientId
+    if (!user.mdPatientId) {
+        console.log('⚠️ User does not have mdPatientId:', user.id);
+        return;
+    }
+
+    // Check if order already has mdCaseId
+    if (order.mdCaseId) {
+        console.log('ℹ️ Order already has mdCaseId:', order.mdCaseId);
+        return;
+    }
+
+    try {
+        // Get MD Integration access token
+        const tokenResponse = await MDAuthService.generateToken();
+
+        // Create case using MD Integration
+        const caseQuestions = order.questionnaireAnswers
+            ? Object.entries(order.questionnaireAnswers).map(([question, answer]) => ({
+                question: question,
+                answer: String(answer),
+                type: "string"
+            }))
+            : [];
+
+        // Determine case offerings based on environment
+        let caseOfferings: { offering_id: string }[] = [];
+
+        if (process.env.NODE_ENV !== 'production') {
+            // Always use test offering in non-production environments
+            caseOfferings = [
+                {
+                    offering_id: "3c3d0118-e362-4466-9c92-d852720c5a41"
+                }
+            ];
+        } else if (treatment && treatment.mdCaseId) {
+            // Use treatment's mdCaseId for offering in production
+            caseOfferings = [
+                {
+                    offering_id: treatment.mdCaseId
+                }
+            ];
+        }
+
+        const caseData = {
+            patient_id: user.mdPatientId,
+            metadata: `orderId: ${order.id}`,
+            hold_status: false,
+            case_questions: caseQuestions,
+            case_offerings: caseOfferings,
+        };
+
+        const caseResponse = await MDCaseService.createCase(caseData, tokenResponse.access_token);
+
+        // Save the case ID to the order
+        await order.update({
+            mdCaseId: caseResponse.case_id
+        });
+
+        console.log('✅ MD Integration case created and saved to order:', {
+            orderId: order.id,
+            caseId: caseResponse
+        });
+
+    } catch (error) {
+        console.error('❌ Error creating MD Integration case:', error);
+    }
+};
+
 
 export const processStripeWebhook = async (event: Stripe.Event): Promise<void> => {
     switch (event.type) {
@@ -421,6 +527,9 @@ export const processStripeWebhook = async (event: Stripe.Event): Promise<void> =
 
         case "customer.subscription.deleted":
             await handleSubscriptionDeleted(event.data.object as Stripe.Subscription)
+            break;
+        case "payment_intent.amount_capturable_updated":
+            await handlePaymentIntentAmountCapturableUpdated(event.data.object as Stripe.PaymentIntent)
             break;
 
 

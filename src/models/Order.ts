@@ -185,6 +185,13 @@ export default class Order extends Entity {
   @HasMany(() => ShippingOrder)
   declare shippingOrders: ShippingOrder[];
 
+  @Column({
+    type: DataType.STRING,
+    allowNull: true,
+  })
+  declare mdCaseId?: string;
+
+
   // Static method to generate order number
   public static generateOrderNumber(): string {
     const timestamp = Date.now().toString();
